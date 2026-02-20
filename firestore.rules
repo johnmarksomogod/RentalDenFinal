@@ -1,0 +1,50 @@
+rules_version = '2';
+// Firebase Firestore Security Rules for Rental System
+// Multi-tenant: Each user only accesses their own data (user_id scoped)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper: user can only access their own documents
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /vehicles/{docId} {
+      allow read, write: if isOwner(resource.data.user_id);
+      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
+    }
+    
+    match /vehicle_variants/{docId} {
+      allow read, write: if isOwner(resource.data.user_id);
+      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
+    }
+    
+    match /bookings/{docId} {
+      allow read, write: if request.auth != null && resource.data.user_id == request.auth.uid;
+      allow create: if request.resource.data.user_id != null; // CustomerSide sets owner's user_id
+    }
+    
+    match /car_owners/{docId} {
+      allow read, write: if isOwner(resource.data.user_id);
+      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
+    }
+    
+    match /notifications/{docId} {
+      allow read, write: if isOwner(resource.data.user_id);
+    }
+    
+    match /website_content/{docId} {
+      allow read: if true; // Public read for CustomerSide
+      allow write: if isOwner(resource.data.user_id);
+    }
+    
+    match /gallery/{docId} {
+      allow read, write: if isOwner(resource.data.user_id);
+    }
+    
+    match /gallery_images/{docId} {
+      allow read: if true; // Public read for CustomerSide
+      allow write: if isOwner(resource.data.user_id);
+    }
+  }
+}
