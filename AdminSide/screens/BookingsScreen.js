@@ -17,7 +17,30 @@ import EmailService from '../services/emailService';
 
 const { width } = Dimensions.get('window');
 
-// ─── Status config — matches DriverDashboard exactly ──────────────────────────
+// ─── Fuel helpers (mirrors SystemSettingsScreen) ──────────────────────────────
+const FUEL_CATEGORY_META = {
+  gasoline:      { label: "Gasoline",      icon: "flame-outline",  color: "#f59e0b", bg: "#fef3c7" },
+  diesel:        { label: "Diesel",         icon: "water-outline",  color: "#0ea5e9", bg: "#e0f2fe" },
+  electric:      { label: "Electric",       icon: "flash-outline",  color: "#3b82f6", bg: "#dbeafe" },
+  hybrid:        { label: "Hybrid",         icon: "leaf-outline",   color: "#16a34a", bg: "#dcfce7" },
+  plugin_hybrid: { label: "Plug-in Hybrid", icon: "leaf-outline",   color: "#059669", bg: "#d1fae5" },
+  cng:           { label: "CNG",            icon: "cloud-outline",  color: "#8b5cf6", bg: "#ede9fe" },
+  lpg:           { label: "LPG",            icon: "beaker-outline", color: "#f97316", bg: "#ffedd5" },
+};
+
+const getFuelMeta = (fuelTypeString) => {
+  if (!fuelTypeString) return FUEL_CATEGORY_META.gasoline;
+  const f = fuelTypeString.toLowerCase();
+  if (f.includes("electric"))                          return FUEL_CATEGORY_META.electric;
+  if (f.includes("plug"))                              return FUEL_CATEGORY_META.plugin_hybrid;
+  if (f.includes("hybrid"))                            return FUEL_CATEGORY_META.hybrid;
+  if (f.includes("diesel"))                            return FUEL_CATEGORY_META.diesel;
+  if (f.includes("cng") || f.includes("compressed"))  return FUEL_CATEGORY_META.cng;
+  if (f.includes("lpg") || f.includes("liquefied"))   return FUEL_CATEGORY_META.lpg;
+  return FUEL_CATEGORY_META.gasoline;
+};
+
+// ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_COLOR = {
   pending:   '#f59e0b',
   confirmed: '#3b82f6',
@@ -32,7 +55,6 @@ const STATUS_COLOR = {
 const fmt     = (v) => `₱${parseFloat(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 const fmtDate = (d) => !d ? '—' : new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 
-// ─── Status flow ───────────────────────────────────────────────────────────────
 const STATUS_FLOW = {
   pending:   ['confirmed', 'declined', 'cancelled'],
   confirmed: ['ongoing', 'cancelled'],
@@ -45,8 +67,6 @@ const STATUS_FLOW = {
 };
 
 const ALL_STATUSES = ['pending', 'confirmed', 'ongoing', 'delivered', 'retrieved', 'completed', 'cancelled', 'declined'];
-
-// Statuses that mean inventory is currently reserved/in-use
 const INVENTORY_RESERVED_STATUSES = ['confirmed', 'ongoing', 'delivered', 'retrieved'];
 
 // ─── Driver Status Timeline ────────────────────────────────────────────────────
@@ -74,7 +94,8 @@ const DriverStatusTimeline = ({ booking }) => {
               <View style={[tlS.dot, isDone && tlS.dotDone, isCurrent && tlS.dotCurrent]}>
                 <Ionicons name={step.icon} size={11} color={isDone ? '#fff' : '#9ca3af'} />
               </View>
-              <Text style={[tlS.label, isDone && tlS.labelDone, isCurrent && tlS.labelCurrent]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              <Text style={[tlS.label, isDone && tlS.labelDone, isCurrent && tlS.labelCurrent]}
+                numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                 {step.label}
               </Text>
             </View>
@@ -312,7 +333,6 @@ const StatusModal = ({ visible, booking, onClose, onUpdate, loading }) => {
             </View>
             <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#374151" /></TouchableOpacity>
           </View>
-
           <ScrollView style={stS.body} showsVerticalScrollIndicator={false}>
             {nextOptions.length === 0 ? (
               <View style={stS.noOptions}>
@@ -334,34 +354,20 @@ const StatusModal = ({ visible, booking, onClose, onUpdate, loading }) => {
                     </View>
                     {loading ? <ActivityIndicator size="small" color={STATUS_COLOR[status]} /> : <Ionicons name="chevron-forward" size={18} color={STATUS_COLOR[status]} />}
                   </TouchableOpacity>
-
                   {status === 'declined' && (
                     <View style={stS.declineInput}>
                       <Text style={stS.declineLabel}>Decline Reason</Text>
-                      <TextInput
-                        style={stS.declineBox}
-                        value={declineReason}
-                        onChangeText={setDeclineReason}
-                        placeholder="Enter reason for declining..."
-                        placeholderTextColor="#9ca3af"
-                        multiline
-                      />
+                      <TextInput style={stS.declineBox} value={declineReason} onChangeText={setDeclineReason} placeholder="Enter reason for declining..." placeholderTextColor="#9ca3af" multiline />
                     </View>
                   )}
                 </View>
               ))
             )}
-
             <View style={stS.divider} />
             <Text style={stS.overrideLabel}>Admin Override</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={stS.overrideRow}>
               {ALL_STATUSES.filter(s => s !== current).map(status => (
-                <TouchableOpacity
-                  key={status}
-                  style={[stS.chip, { backgroundColor: STATUS_COLOR[status] + '22', borderColor: STATUS_COLOR[status] + '66' }]}
-                  onPress={() => onUpdate(booking.id, status, '')}
-                  disabled={loading}
-                >
+                <TouchableOpacity key={status} style={[stS.chip, { backgroundColor: STATUS_COLOR[status] + '22', borderColor: STATUS_COLOR[status] + '66' }]} onPress={() => onUpdate(booking.id, status, '')} disabled={loading}>
                   <Text style={[stS.chipTxt, { color: STATUS_COLOR[status] }]}>{status}</Text>
                 </TouchableOpacity>
               ))}
@@ -408,6 +414,16 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
   const vehicleLine  = [booking.vehicles?.year, booking.vehicles?.make, booking.vehicles?.model].filter(Boolean).join(' ');
   const totalPaid    = (booking.payment_log || []).reduce((a, e) => a + (Number(e.amount) || 0), 0);
 
+  // ── Fuel type info ──────────────────────────────────────────────────────────
+  const fuelType = booking.vehicles?.fuel_type;
+  const fuelMeta = fuelType ? getFuelMeta(fuelType) : null;
+
+  // ── Deposit info ────────────────────────────────────────────────────────────
+  const depositAmount    = Number(booking.vehicles?.deposit_amount || booking.deposit_amount || 0);
+  const depositCollected = Number(booking.deposit_collected || 0);
+  const depositReturned  = !!booking.deposit_returned;
+  const showDeposit      = depositAmount > 0;
+
   return (
     <TouchableOpacity style={[cardS.card, { borderLeftColor: color }]} onPress={() => onCardPress(booking)} activeOpacity={0.85}>
 
@@ -429,6 +445,7 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
         </TouchableOpacity>
       </View>
 
+      {/* Fuel type + plate pills */}
       <View style={cardS.pillRow}>
         {plate && (
           <View style={cardS.pill}>
@@ -446,6 +463,12 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
           <View style={cardS.pill}>
             <Ionicons name="color-palette-outline" size={11} color="#6b7280" />
             <Text style={cardS.pillTxt}>{booking.vehicle_variants.color}</Text>
+          </View>
+        )}
+        {fuelMeta && (
+          <View style={[cardS.pill, { backgroundColor: fuelMeta.bg }]}>
+            <Ionicons name={fuelMeta.icon} size={11} color={fuelMeta.color} />
+            <Text style={[cardS.pillTxt, { color: fuelMeta.color }]}>{fuelType}</Text>
           </View>
         )}
       </View>
@@ -466,6 +489,39 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
         <Ionicons name="cash-outline" size={13} color="#9ca3af" />
         <Text style={cardS.rowTxt}>{fmt(booking.total_price)}</Text>
       </View>
+
+      {/* ── Deposit badge ── */}
+      {showDeposit && (
+        <View style={[
+          cardS.depositBadge,
+          depositReturned
+            ? cardS.depositBadgeReturned
+            : depositCollected > 0
+              ? cardS.depositBadgeCollected
+              : cardS.depositBadgePending
+        ]}>
+          <Ionicons
+            name={depositReturned ? 'shield-checkmark' : depositCollected > 0 ? 'shield' : 'shield-outline'}
+            size={14}
+            color={depositReturned ? '#059669' : depositCollected > 0 ? '#7c3aed' : '#6b7280'}
+          />
+          <View style={{ flex: 1, marginLeft: 6 }}>
+            <Text style={[
+              cardS.depositAmt,
+              { color: depositReturned ? '#059669' : depositCollected > 0 ? '#7c3aed' : '#374151' }
+            ]}>
+              {fmt(depositAmount)} Security Deposit
+            </Text>
+            <Text style={cardS.depositSub}>
+              {depositReturned
+                ? '✓ Returned to customer'
+                : depositCollected > 0
+                  ? `Collected — to be returned at retrieval`
+                  : 'Collect at delivery'}
+            </Text>
+          </View>
+        </View>
+      )}
 
       <View style={cardS.driverRow}>
         <Ionicons name="person-circle-outline" size={14} color="#374151" />
@@ -493,24 +549,16 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
       )}
 
       <View style={cardS.actions}>
-        <TouchableOpacity
-          style={cardS.actionBtn}
-          onPress={(e) => { e.stopPropagation(); onStatusPress(booking); }}
-        >
+        <TouchableOpacity style={cardS.actionBtn} onPress={(e) => { e.stopPropagation(); onStatusPress(booking); }}>
           <Ionicons name="swap-vertical-outline" size={14} color="#374151" />
           <Text style={cardS.actionTxt}>Status</Text>
         </TouchableOpacity>
-
         {isDelivery && status !== 'completed' && status !== 'cancelled' && status !== 'declined' && (
-          <TouchableOpacity
-            style={[cardS.actionBtn, booking.assigned_driver && cardS.actionBtnAlt]}
-            onPress={(e) => { e.stopPropagation(); onAssignPress(booking); }}
-          >
+          <TouchableOpacity style={[cardS.actionBtn, booking.assigned_driver && cardS.actionBtnAlt]} onPress={(e) => { e.stopPropagation(); onAssignPress(booking); }}>
             <Ionicons name={booking.assigned_driver ? 'swap-horizontal' : 'person-add'} size={14} color="#374151" />
             <Text style={cardS.actionTxt}>{booking.assigned_driver ? 'Reassign' : 'Assign Driver'}</Text>
           </TouchableOpacity>
         )}
-
         <TouchableOpacity style={[cardS.actionBtn, cardS.actionBtnDark]} onPress={() => onCardPress(booking)}>
           <Ionicons name="create-outline" size={14} color="#fff" />
           <Text style={[cardS.actionTxt, { color: '#fff' }]}>Edit</Text>
@@ -540,6 +588,15 @@ const cardS = StyleSheet.create({
   chargePills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   cpill:       { backgroundColor: '#fffbeb', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   cpillTxt:    { fontSize: 12, fontWeight: '600', color: '#92400e' },
+
+  // Deposit badge variants
+  depositBadge:          { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8, borderWidth: 1 },
+  depositBadgePending:   { backgroundColor: '#f9fafb', borderColor: '#e5e7eb' },
+  depositBadgeCollected: { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' },
+  depositBadgeReturned:  { backgroundColor: '#f0fdf4', borderColor: '#86efac' },
+  depositAmt:  { fontSize: 13, fontWeight: '700' },
+  depositSub:  { fontSize: 11, color: '#6b7280', marginTop: 1 },
+
   totalPaid:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0fdf4', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: '#86efac' },
   totalPaidL:  { fontSize: 13, fontWeight: '600', color: '#166534' },
   totalPaidV:  { fontSize: 15, fontWeight: '800', color: '#15803d' },
@@ -558,7 +615,6 @@ export default function BookingsScreen({ route, navigation }) {
   const [refreshing, setRefreshing]             = useState(false);
   const [selectedBooking, setSelectedBooking]   = useState(null);
 
-  // Modals
   const [editModalVisible, setEditModalVisible]   = useState(false);
   const [addModalVisible, setAddModalVisible]     = useState(false);
   const [statusModal, setStatusModal]             = useState({ visible: false, booking: null });
@@ -567,7 +623,6 @@ export default function BookingsScreen({ route, navigation }) {
   const [actionModalConfig, setActionModalConfig] = useState(null);
   const [statusLoading, setStatusLoading]         = useState(false);
 
-  // Filters & pagination
   const [activeTab, setActiveTab]                 = useState('all');
   const [listStatusFilter, setListStatusFilter]   = useState('All');
   const [listDateFilter, setListDateFilter]       = useState('All');
@@ -575,7 +630,6 @@ export default function BookingsScreen({ route, navigation }) {
   const [currentPage, setCurrentPage]             = useState(1);
   const ITEMS_PER_PAGE                            = 8;
 
-  // Dropdowns
   const [statusDropdownVisible, setStatusDropdownVisible]           = useState(false);
   const [dateDropdownVisible, setDateDropdownVisible]               = useState(false);
   const [vehicleTypeDropdownVisible, setVehicleTypeDropdownVisible] = useState(false);
@@ -588,7 +642,6 @@ export default function BookingsScreen({ route, navigation }) {
   const modalAnimation    = useState(new Animated.Value(0))[0];
   const addModalAnimation = useState(new Animated.Value(0))[0];
 
-  // ── Boot ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     fetchBookings();
     fetchAvailableVehicles();
@@ -609,7 +662,6 @@ export default function BookingsScreen({ route, navigation }) {
 
   const totalPages = Math.ceil(filteredBookings.length / ITEMS_PER_PAGE);
 
-  // ── Fetchers ──────────────────────────────────────────────────────────────
   const fetchBookings = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
@@ -640,19 +692,15 @@ export default function BookingsScreen({ route, navigation }) {
     } catch (e) { console.error(e); }
   };
 
-  // ── Filter ────────────────────────────────────────────────────────────────
   const isDeliveryBooking = (b) =>
-    b.delivery_option === 'deliver' ||
-    ['ongoing','delivered','retrieved','completed'].includes(b.status);
+    b.delivery_option === 'deliver' || ['ongoing','delivered','retrieved','completed'].includes(b.status);
 
   const applyFilters = () => {
     let list = [...bookings];
     const now = new Date();
-
     if (activeTab === 'delivery') list = list.filter(isDeliveryBooking);
     if (listStatusFilter !== 'All') list = list.filter(b => b.status === listStatusFilter);
     if (vehicleTypeFilter !== 'All') list = list.filter(b => b.vehicles?.type === vehicleTypeFilter);
-
     switch (listDateFilter) {
       case 'Today':      list = list.filter(b => new Date(b.created_at).toDateString() === now.toDateString()); break;
       case 'This Week':  { const s = new Date(now); s.setDate(now.getDate() - now.getDay()); list = list.filter(b => new Date(b.created_at) >= s); break; }
@@ -660,134 +708,70 @@ export default function BookingsScreen({ route, navigation }) {
       case 'This Year':  list = list.filter(b => new Date(b.created_at) >= new Date(now.getFullYear(), 0, 1)); break;
       case 'Recent':     list = list.filter(b => new Date(b.created_at) >= new Date(now - 7 * 86400000)); break;
     }
-
     list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     setFilteredBookings(list);
     setCurrentPage(1);
   };
 
-  // ── Inventory adjustment helper ───────────────────────────────────────────
-  // Rules:
-  //   non-active (pending/declined/cancelled) → confirmed : deduct 1 (first reservation)
-  //   active (confirmed/ongoing/delivered/retrieved) → terminal (completed/cancelled/declined/pending) : restore 1
-  //   active → active : 0 (unit already reserved, no double-deduct)
   const computeInventoryAdjustment = (oldStatus, newStatus) => {
     const terminals  = ['completed', 'cancelled', 'declined', 'pending'];
     const wasActive  = INVENTORY_RESERVED_STATUSES.includes(oldStatus);
     const willActive = INVENTORY_RESERVED_STATUSES.includes(newStatus);
-
-    if (!wasActive && newStatus === 'confirmed') return -1; // newly confirming
-    if (wasActive && terminals.includes(newStatus))  return +1; // releasing reservation
-    return 0; // active→active or terminal→terminal: no change
+    if (!wasActive && newStatus === 'confirmed') return -1;
+    if (wasActive && terminals.includes(newStatus)) return +1;
+    return 0;
   };
 
-  // ── Status update — Firebase write is ALWAYS first ────────────────────────
   const handleStatusUpdate = async (bookingId, newStatus, declineReason = '') => {
     setStatusLoading(true);
     try {
       const existing = bookings.find(b => b.id === bookingId);
       if (!existing) throw new Error('Booking not found');
-
       const oldStatus = existing.status;
-      if (oldStatus === newStatus) {
-        setStatusModal({ visible: false, booking: null });
-        setStatusLoading(false);
-        return;
-      }
-
+      if (oldStatus === newStatus) { setStatusModal({ visible: false, booking: null }); setStatusLoading(false); return; }
       const variantId          = existing.vehicle_variant_id;
       const quantityAdjustment = computeInventoryAdjustment(oldStatus, newStatus);
-
-      // ── Step 1: Build payload and write to Firebase IMMEDIATELY ───────────
-      // This always runs — no inventory check can block it.
       const updatePayload = {
-        status:     newStatus,
-        updated_at: new Date().toISOString(),
+        status: newStatus, updated_at: new Date().toISOString(),
         ...(declineReason ? { decline_reason: declineReason } : {}),
-        // Preserve driver assignment so DriverDashboard isMine() keeps matching
         ...(existing.assigned_driver       ? { assigned_driver:       existing.assigned_driver }       : {}),
         ...(existing.assigned_driver_id    ? { assigned_driver_id:    existing.assigned_driver_id }    : {}),
         ...(existing.assigned_driver_email ? { assigned_driver_email: existing.assigned_driver_email } : {}),
       };
-
       await bookingsService.update(bookingId, updatePayload);
-
-      // Optimistic local update immediately after Firebase write succeeds
-      setBookings(prev => prev.map(b =>
-        b.id === bookingId
-          ? { ...b, ...updatePayload }
-          : b
-      ));
-
-      // ── Step 2: Adjust inventory (best-effort, non-blocking) ──────────────
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, ...updatePayload } : b));
       if (quantityAdjustment !== 0 && variantId) {
-        try {
-          await variantsService.adjustQuantity(variantId, quantityAdjustment);
-        } catch (invErr) {
-          // Inventory failed but status already saved — log and warn, do NOT revert
-          console.warn('Inventory adjustment failed (status already updated):', invErr);
-        }
+        try { await variantsService.adjustQuantity(variantId, quantityAdjustment); } catch (invErr) { console.warn('Inventory adjustment failed:', invErr); }
       }
-
-      // ── Step 3: Refresh vehicles if a slot was freed ──────────────────────
       if (['completed', 'cancelled', 'declined'].includes(newStatus)) fetchAvailableVehicles();
-
-      // ── Step 4: Email notification (non-fatal) ────────────────────────────
       if (existing.customer_email) {
-        try {
-          await EmailService.sendStatusUpdateEmail({
-            ...existing,
-            newStatus,
-            bookingId,
-            vehicleMake:    existing.vehicles?.make  || 'N/A',
-            vehicleModel:   existing.vehicles?.model || 'N/A',
-            vehicleYear:    existing.vehicles?.year  || 'N/A',
-            updated_date:   new Date().toISOString(),
-            decline_reason: newStatus === 'declined' ? declineReason : null,
-          }, newStatus);
-        } catch { /* non-fatal */ }
+        try { await EmailService.sendStatusUpdateEmail({ ...existing, newStatus, bookingId, vehicleMake: existing.vehicles?.make || 'N/A', vehicleModel: existing.vehicles?.model || 'N/A', vehicleYear: existing.vehicles?.year || 'N/A', updated_date: new Date().toISOString(), decline_reason: newStatus === 'declined' ? declineReason : null }, newStatus); } catch { }
       }
-
       setStatusModal({ visible: false, booking: null });
-      setFeedbackModal({
-        visible: true,
-        type: 'success',
-        message: `Status updated to "${newStatus}"${existing.customer_email ? ' & customer notified' : ''}.`,
-      });
+      setFeedbackModal({ visible: true, type: 'success', message: `Status updated to "${newStatus}"${existing.customer_email ? ' & customer notified' : ''}.` });
     } catch (err) {
       console.error('Status update error:', err);
-      setFeedbackModal({ visible: true, type: 'error', message: err?.message || 'Status update failed. Please try again.' });
+      setFeedbackModal({ visible: true, type: 'error', message: err?.message || 'Status update failed.' });
     } finally {
       setStatusLoading(false);
     }
   };
 
-  // ── Assign Driver ─────────────────────────────────────────────────────────
   const handleAssignDriver = async (bookingId, driver) => {
     try {
       const displayName = driver.full_name || driver.email;
-      await bookingsService.update(bookingId, {
-        assigned_driver:       displayName,
-        assigned_driver_id:    driver.id,
-        assigned_driver_email: driver.email || '',
-      });
-      setBookings(prev => prev.map(b =>
-        b.id === bookingId
-          ? { ...b, assigned_driver: displayName, assigned_driver_id: driver.id, assigned_driver_email: driver.email || '' }
-          : b
-      ));
+      await bookingsService.update(bookingId, { assigned_driver: displayName, assigned_driver_id: driver.id, assigned_driver_email: driver.email || '' });
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, assigned_driver: displayName, assigned_driver_id: driver.id, assigned_driver_email: driver.email || '' } : b));
       setFeedbackModal({ visible: true, type: 'success', message: `Driver "${displayName}" assigned!` });
     } catch {
       setFeedbackModal({ visible: true, type: 'error', message: 'Failed to assign driver.' });
     }
   };
 
-  // ── Delete / Edit ─────────────────────────────────────────────────────────
   const deleteBooking = async (bookingId) => {
     try {
       const b = await bookingsService.getById(bookingId);
-      if (b?.status === 'confirmed' && b.vehicle_variant_id)
-        await variantsService.adjustQuantity(b.vehicle_variant_id, +1);
+      if (b?.status === 'confirmed' && b.vehicle_variant_id) await variantsService.adjustQuantity(b.vehicle_variant_id, +1);
       await bookingsService.delete(bookingId);
       await fetchBookings();
       await fetchAvailableVehicles();
@@ -800,80 +784,39 @@ export default function BookingsScreen({ route, navigation }) {
     try {
       const existing = await bookingsService.getById(updatedBooking.id);
       if (!existing) { setFeedbackModal({ visible: true, type: 'error', message: 'Booking not found.' }); return; }
-
-      if (updatedBooking.status === 'declined' && !updatedBooking.decline_reason?.trim()) {
-        setFeedbackModal({ visible: true, type: 'error', message: 'Please provide a decline reason.' }); return;
-      }
-
+      if (updatedBooking.status === 'declined' && !updatedBooking.decline_reason?.trim()) { setFeedbackModal({ visible: true, type: 'error', message: 'Please provide a decline reason.' }); return; }
       const oldStatus = existing.status;
       const newStatus = updatedBooking.status;
       const variantId = updatedBooking.vehicle_variant_id || existing.vehicle_variant_id;
-      const q         = computeInventoryAdjustment(oldStatus, newStatus);
-
-      // ── Step 1: Write ALL fields to Firebase FIRST — no inventory pre-checks ──
+      const q = computeInventoryAdjustment(oldStatus, newStatus);
       await bookingsService.update(updatedBooking.id, {
-        customer_name:      updatedBooking.customer_name,
-        customer_email:     updatedBooking.customer_email,
-        customer_phone:     updatedBooking.customer_phone,
-        rental_start_date:  updatedBooking.rental_start_date,
-        rental_end_date:    updatedBooking.rental_end_date,
-        total_price:        updatedBooking.total_price,
-        pickup_location:    updatedBooking.pickup_location,
-        license_number:     updatedBooking.license_number,
-        vehicle_id:         updatedBooking.vehicle_id,
-        vehicle_variant_id: updatedBooking.vehicle_variant_id,
-        status:             newStatus,
-        gov_id_url:         updatedBooking.gov_id_url,
-        decline_reason:     updatedBooking.decline_reason || null,
-        assigned_driver:    updatedBooking.assigned_driver || null,
-        updated_at:         new Date().toISOString(),
+        customer_name: updatedBooking.customer_name, customer_email: updatedBooking.customer_email,
+        customer_phone: updatedBooking.customer_phone, rental_start_date: updatedBooking.rental_start_date,
+        rental_end_date: updatedBooking.rental_end_date, total_price: updatedBooking.total_price,
+        pickup_location: updatedBooking.pickup_location, license_number: updatedBooking.license_number,
+        vehicle_id: updatedBooking.vehicle_id, vehicle_variant_id: updatedBooking.vehicle_variant_id,
+        status: newStatus, gov_id_url: updatedBooking.gov_id_url,
+        decline_reason: updatedBooking.decline_reason || null,
+        assigned_driver: updatedBooking.assigned_driver || null, updated_at: new Date().toISOString(),
       });
-
-      // ── Step 2: Adjust inventory best-effort ──────────────────────────────
-      if (q !== 0 && variantId) {
-        try { await variantsService.adjustQuantity(variantId, q); }
-        catch (invErr) {
-          console.warn('Inventory adjustment failed (booking already saved):', invErr);
-        }
-      }
-
+      if (q !== 0 && variantId) { try { await variantsService.adjustQuantity(variantId, q); } catch (invErr) { console.warn('Inventory adjustment failed:', invErr); } }
       await fetchBookings();
       await fetchAvailableVehicles();
       closeEditModal();
-
-      // ── Step 3: Email (non-fatal) ─────────────────────────────────────────
       if (oldStatus !== newStatus && updatedBooking.customer_email) {
         try {
-          await EmailService.sendStatusUpdateEmail({
-            ...updatedBooking, newStatus, bookingId: updatedBooking.id,
-            vehicleMake:    updatedBooking.vehicles?.make  || existing.vehicles?.make  || 'N/A',
-            vehicleModel:   updatedBooking.vehicles?.model || existing.vehicles?.model || 'N/A',
-            vehicleYear:    updatedBooking.vehicles?.year  || existing.vehicles?.year  || 'N/A',
-            variantColor:   updatedBooking.vehicle_variants?.color || existing.vehicle_variants?.color || null,
-            updated_date:   new Date().toISOString(),
-            decline_reason: newStatus === 'declined' ? updatedBooking.decline_reason : null,
-          }, newStatus);
+          await EmailService.sendStatusUpdateEmail({ ...updatedBooking, newStatus, bookingId: updatedBooking.id, vehicleMake: updatedBooking.vehicles?.make || existing.vehicles?.make || 'N/A', vehicleModel: updatedBooking.vehicles?.model || existing.vehicles?.model || 'N/A', vehicleYear: updatedBooking.vehicles?.year || existing.vehicles?.year || 'N/A', variantColor: updatedBooking.vehicle_variants?.color || existing.vehicle_variants?.color || null, updated_date: new Date().toISOString(), decline_reason: newStatus === 'declined' ? updatedBooking.decline_reason : null }, newStatus);
           setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated & customer notified!' });
-        } catch (emailErr) {
-          console.error('Email error:', emailErr);
-          setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated (email notification failed).' });
-        }
-      } else {
-        setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated!' });
-      }
-    } catch (err) {
-      console.error('Update booking error:', err);
-      setFeedbackModal({ visible: true, type: 'error', message: err?.message || 'Update failed. Please try again.' });
-    }
+        } catch (emailErr) { setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated (email notification failed).' }); }
+      } else { setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated!' }); }
+    } catch (err) { setFeedbackModal({ visible: true, type: 'error', message: err?.message || 'Update failed.' }); }
   };
 
-  // ── Modal helpers ─────────────────────────────────────────────────────────
   const openEditModal = useCallback((booking) => {
     setSelectedBooking(booking);
     setEditModalVisible(true);
     Animated.timing(modalAnimation, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-    if (route?.params?.openBookingId && navigation?.setParams)
-      navigation.setParams({ openBookingId: undefined, openInEditMode: undefined });
+    if (route?.params?.openBookingId && navigation?.setParams) navigation.setParams({ openBookingId: undefined, openInEditMode: undefined });
   }, [modalAnimation]);
 
   const closeEditModal = useCallback(() => {
@@ -896,12 +839,9 @@ export default function BookingsScreen({ route, navigation }) {
     return new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   };
 
-  // ── Dropdown helpers ──────────────────────────────────────────────────────
   const EnhancedDropdown = ({ visible, onClose, children, title }) => {
     const anim = useState(new Animated.Value(0))[0];
-    useEffect(() => {
-      Animated.spring(anim, { toValue: visible ? 1 : 0, tension: 100, friction: 8, useNativeDriver: true }).start();
-    }, [visible]);
+    useEffect(() => { Animated.spring(anim, { toValue: visible ? 1 : 0, tension: 100, friction: 8, useNativeDriver: true }).start(); }, [visible]);
     if (!visible) return null;
     return (
       <Modal visible={visible} transparent animationType="none">
@@ -948,11 +888,9 @@ export default function BookingsScreen({ route, navigation }) {
     );
   };
 
-  // ── Delivery stats ────────────────────────────────────────────────────────
   const deliveryBookings = bookings.filter(isDeliveryBooking);
   const paginated        = filteredBookings.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // ── Header ────────────────────────────────────────────────────────────────
   const renderHeader = () => (
     <View>
       <View style={sc.header}>
@@ -970,13 +908,8 @@ export default function BookingsScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* Tabs */}
       <View style={sc.tabBar}>
-        {[
-          { key: 'all',      label: 'All',        count: bookings.length },
-          { key: 'delivery', label: 'Deliveries',  count: deliveryBookings.length },
-        ].map(t => (
+        {[{ key: 'all', label: 'All', count: bookings.length }, { key: 'delivery', label: 'Deliveries', count: deliveryBookings.length }].map(t => (
           <TouchableOpacity key={t.key} style={[sc.tab, activeTab === t.key && sc.tabActive]} onPress={() => { setActiveTab(t.key); setCurrentPage(1); }}>
             <Text style={[sc.tabTxt, activeTab === t.key && sc.tabTxtActive]}>{t.label}</Text>
             <View style={[sc.tabBadge, activeTab === t.key && sc.tabBadgeActive]}>
@@ -985,14 +918,12 @@ export default function BookingsScreen({ route, navigation }) {
           </TouchableOpacity>
         ))}
       </View>
-
-      {/* Delivery summary strip */}
       {activeTab === 'delivery' && (
         <View style={sc.strip}>
           {[
             { label: 'Unassigned', count: deliveryBookings.filter(b => !b.assigned_driver && !['completed','cancelled'].includes(b.status)).length, color: '#f59e0b', icon: 'alert-circle' },
-            { label: 'Active',     count: deliveryBookings.filter(b => ['confirmed','ongoing','delivered','retrieved'].includes(b.status)).length, color: '#111827', icon: 'car' },
-            { label: 'Done',       count: deliveryBookings.filter(b => b.status === 'completed').length, color: '#10b981', icon: 'checkmark-circle' },
+            { label: 'Active', count: deliveryBookings.filter(b => ['confirmed','ongoing','delivered','retrieved'].includes(b.status)).length, color: '#111827', icon: 'car' },
+            { label: 'Done', count: deliveryBookings.filter(b => b.status === 'completed').length, color: '#10b981', icon: 'checkmark-circle' },
           ].map(s => (
             <View key={s.label} style={sc.stripItem}>
               <Ionicons name={s.icon} size={16} color={s.color} />
@@ -1002,8 +933,6 @@ export default function BookingsScreen({ route, navigation }) {
           ))}
         </View>
       )}
-
-      {/* Filters */}
       <View style={sc.filterCard}>
         <Text style={sc.filterTitle}>{activeTab === 'delivery' ? 'Delivery Assignments' : 'All Bookings'}</Text>
         <View style={sc.filterRow}>
@@ -1027,14 +956,9 @@ export default function BookingsScreen({ route, navigation }) {
 
   const renderEmpty = () => (
     <View style={sc.empty}>
-      {loading
-        ? <ActivityIndicator size="large" color="#111827" />
-        : <>
-            <Ionicons name="document-text-outline" size={48} color="#d1d5db" />
-            <Text style={sc.emptyTitle}>No bookings found</Text>
-            <Text style={sc.emptySub}>Try adjusting your filters</Text>
-          </>
-      }
+      {loading ? <ActivityIndicator size="large" color="#111827" /> : (
+        <><Ionicons name="document-text-outline" size={48} color="#d1d5db" /><Text style={sc.emptyTitle}>No bookings found</Text><Text style={sc.emptySub}>Try adjusting your filters</Text></>
+      )}
     </View>
   );
 
@@ -1064,10 +988,8 @@ export default function BookingsScreen({ route, navigation }) {
     );
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={sc.container}>
-      {/* Dropdowns */}
       <EnhancedDropdown visible={statusDropdownVisible} onClose={() => setStatusDropdownVisible(false)} title="Filter by Status">
         {['All','pending','confirmed','ongoing','delivered','retrieved','completed','cancelled','declined'].map(s => (
           <DItem key={s} selected={listStatusFilter === s} label={s === 'All' ? 'All Statuses' : s.charAt(0).toUpperCase() + s.slice(1)} onPress={() => { setListStatusFilter(s); setStatusDropdownVisible(false); setCurrentPage(1); }} />
@@ -1084,66 +1006,25 @@ export default function BookingsScreen({ route, navigation }) {
         ))}
       </EnhancedDropdown>
 
-      {/* Status modal */}
-      <StatusModal
-        visible={statusModal.visible}
-        booking={statusModal.booking}
-        onClose={() => setStatusModal({ visible: false, booking: null })}
-        onUpdate={handleStatusUpdate}
-        loading={statusLoading}
-      />
+      <StatusModal visible={statusModal.visible} booking={statusModal.booking} onClose={() => setStatusModal({ visible: false, booking: null })} onUpdate={handleStatusUpdate} loading={statusLoading} />
+      <AssignDriverModal visible={assignModal.visible} booking={assignModal.booking} onClose={() => setAssignModal({ visible: false, booking: null })} onAssign={handleAssignDriver} drivers={drivers} />
 
-      {/* Assign driver modal */}
-      <AssignDriverModal
-        visible={assignModal.visible}
-        booking={assignModal.booking}
-        onClose={() => setAssignModal({ visible: false, booking: null })}
-        onAssign={handleAssignDriver}
-        drivers={drivers}
-      />
-
-      {/* Feedback */}
-      <ActionModal
-        visible={feedbackModal.visible}
-        type={feedbackModal.type}
-        title={feedbackModal.type === 'success' ? 'Success' : 'Error'}
-        message={feedbackModal.message}
-        confirmText="OK"
+      <ActionModal visible={feedbackModal.visible} type={feedbackModal.type} title={feedbackModal.type === 'success' ? 'Success' : 'Error'} message={feedbackModal.message} confirmText="OK"
         onClose={() => setFeedbackModal({ visible: false, type: 'success', message: '' })}
         onConfirm={() => setFeedbackModal({ visible: false, type: 'success', message: '' })}
       />
-
       {actionModalConfig && (
         <ActionModal visible type="confirm" title={actionModalConfig.title} message={actionModalConfig.message}
           onClose={() => setActionModalConfig(null)} onConfirm={() => { actionModalConfig.onConfirm(); setActionModalConfig(null); }} />
       )}
 
-      <EditBookingModal
-        visible={editModalVisible}
-        booking={selectedBooking}
-        availableVehicles={availableVehicles}
-        closeEditModal={closeEditModal}
-        updateBooking={updateBooking}
-        deleteBooking={deleteBooking}
-        modalAnimation={modalAnimation}
-        styles={sc}
-        formatDate={formatDate}
-        CalendarModalComponent={CalendarModal}
+      <EditBookingModal visible={editModalVisible} booking={selectedBooking} availableVehicles={availableVehicles} closeEditModal={closeEditModal} updateBooking={updateBooking} deleteBooking={deleteBooking} modalAnimation={modalAnimation} styles={sc} formatDate={formatDate} CalendarModalComponent={CalendarModal}
         onAssignDriver={(b) => setAssignModal({ visible: true, booking: b })}
-        extraContent={selectedBooking && isDeliveryBooking(selectedBooking) ? (
-          <DriverStatusTimeline booking={selectedBooking} />
-        ) : null}
+        extraContent={selectedBooking && isDeliveryBooking(selectedBooking) ? (<DriverStatusTimeline booking={selectedBooking} />) : null}
       />
-
-      <AddBookingModal
-        visible={addModalVisible}
-        availableVehicles={availableVehicles}
-        closeModal={closeAddModal}
+      <AddBookingModal visible={addModalVisible} availableVehicles={availableVehicles} closeModal={closeAddModal}
         onBookingAdded={async () => { await fetchBookings(); await fetchAvailableVehicles(); setFeedbackModal({ visible: true, type: 'success', message: 'Booking added!' }); }}
-        modalAnimation={addModalAnimation}
-        styles={sc}
-        formatDate={formatDate}
-        CalendarModalComponent={CalendarModal}
+        modalAnimation={addModalAnimation} styles={sc} formatDate={formatDate} CalendarModalComponent={CalendarModal}
       />
 
       <FlatList
@@ -1157,9 +1038,7 @@ export default function BookingsScreen({ route, navigation }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 20 }}
         renderItem={({ item }) => (
-          <BookingCard
-            booking={item}
-            activeTab={activeTab}
+          <BookingCard booking={item} activeTab={activeTab}
             onStatusPress={(b) => setStatusModal({ visible: true, booking: b })}
             onAssignPress={(b) => setAssignModal({ visible: true, booking: b })}
             onCardPress={openEditModal}
@@ -1170,7 +1049,6 @@ export default function BookingsScreen({ route, navigation }) {
   );
 }
 
-// ─── Screen styles ─────────────────────────────────────────────────────────────
 const sc = StyleSheet.create({
   container:    { flex: 1, backgroundColor: '#f9fafb' },
   header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, backgroundColor: '#f9fafb' },
@@ -1211,7 +1089,6 @@ const sc = StyleSheet.create({
   pageNumActive:{ backgroundColor: '#111827', borderColor: '#111827' },
   pageNumTxt:   { fontSize: 14, fontWeight: '600', color: '#374151' },
   pageNumTxtActive: { color: '#fff' },
-  // Dropdown
   ddOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   ddContainer:  { backgroundColor: '#fff', borderRadius: 16, minWidth: 250, maxWidth: width - 40, maxHeight: '70%', elevation: 12 },
   ddTitle:      { padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
@@ -1221,14 +1098,12 @@ const sc = StyleSheet.create({
   dItemSel:     { backgroundColor: '#f3f4f6' },
   dItemTxt:     { fontSize: 15, color: '#1f2937', fontWeight: '500', flex: 1 },
   dItemTxtSel:  { color: '#111827', fontWeight: '700' },
-  // Calendar
   calOverlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   calContainer: { backgroundColor: '#fff', borderRadius: 16, padding: 16, width: '100%', maxWidth: 360, elevation: 8 },
   calHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   calTitle:     { fontSize: 17, fontWeight: '600', color: '#111827' },
   calFooter:    { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
   calFooterTxt: { fontSize: 14, fontWeight: '500', color: '#374151' },
-  // EditBookingModal passthrough styles
   modalContainer:    { flex: 1, backgroundColor: '#f3f4f6' },
   modalHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   modalHeaderButton: { padding: 8, borderRadius: 8 },

@@ -1,558 +1,509 @@
-const express = require('express');
-const nodemailer = require('nodemailer');
-const cors = require('cors');
-require('dotenv').config();
+import express from "express";
+import nodemailer from "nodemailer";
+import cors from "cors";
+import dotenv from "dotenv";
+
+dotenv.config();
+console.log("Loaded ENV:", process.env.EMAIL_USER, process.env.EMAIL_PASS ? "PASS_SET" : "PASS_MISSING");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Create Nodemailer transporter
-const transporter = nodemailer.createTransporter({
-  service: 'gmail', // or your preferred email service
+// ─── Transporter ──────────────────────────────────────────────────────────────
+const transporter = nodemailer.createTransport({
+  service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // Use app password for Gmail
+    pass: process.env.EMAIL_PASS,
   },
 });
 
-// Test the transporter
-transporter.verify((error, success) => {
-  if (error) {
-    console.log('Email configuration error:', error);
-  } else {
-    console.log('Email server is ready to send messages');
-  }
-});
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmt = (v) =>
+  `₱${parseFloat(v || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 
-// Email templates
-const createCustomerEmailTemplate = (bookingData) => {
-  const { 
-    customer_name, 
-    vehicle_info, 
-    rental_start_date, 
-    rental_end_date, 
-    pickup_location, 
-    total_price,
-    booking_id 
-  } = bookingData;
-
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Booking Confirmation - The Rental Den</title>
-      <style>
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          line-height: 1.6;
-          color: #333;
-          max-width: 600px;
-          margin: 0 auto;
-          background-color: #f8f9fa;
-        }
-        .container {
-          background-color: #ffffff;
-          padding: 0;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          overflow: hidden;
-        }
-        .header {
-          background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
-          color: white;
-          padding: 30px;
-          text-align: center;
-        }
-        .header h1 {
-          margin: 0;
-          font-size: 28px;
-          font-weight: 700;
-        }
-        .header p {
-          margin: 10px 0 0 0;
-          font-size: 16px;
-          opacity: 0.9;
-        }
-        .content {
-          padding: 30px;
-        }
-        .greeting {
-          font-size: 18px;
-          margin-bottom: 20px;
-          color: #1f2937;
-        }
-        .booking-details {
-          background-color: #f8fafc;
-          border: 2px solid #e2e8f0;
-          border-radius: 10px;
-          padding: 25px;
-          margin: 25px 0;
-        }
-        .detail-row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 12px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .detail-row:last-child {
-          border-bottom: none;
-          margin-bottom: 0;
-        }
-        .detail-label {
-          font-weight: 600;
-          color: #374151;
-          width: 40%;
-        }
-        .detail-value {
-          color: #1f2937;
-          width: 60%;
-          text-align: right;
-          font-weight: 500;
-        }
-        .total-price {
-          background-color: #dcfce7;
-          border: 2px solid #16a34a;
-          border-radius: 8px;
-          padding: 15px;
-          text-align: center;
-          margin: 20px 0;
-        }
-        .total-price .amount {
-          font-size: 24px;
-          font-weight: 700;
-          color: #15803d;
-        }
-        .status-badge {
-          display: inline-block;
-          background-color: #fef3c7;
-          color: #d97706;
-          padding: 6px 12px;
-          border-radius: 20px;
-          font-size: 14px;
-          font-weight: 600;
-          text-transform: uppercase;
-        }
-        .important-notes {
-          background-color: #fef7ff;
-          border-left: 4px solid #a855f7;
-          padding: 20px;
-          margin: 25px 0;
-          border-radius: 0 8px 8px 0;
-        }
-        .important-notes h3 {
-          color: #7c3aed;
-          margin-top: 0;
-          font-size: 16px;
-        }
-        .important-notes ul {
-          margin: 10px 0;
-          padding-left: 20px;
-        }
-        .important-notes li {
-          margin-bottom: 8px;
-          color: #374151;
-        }
-        .contact-info {
-          background-color: #f1f5f9;
-          padding: 20px;
-          border-radius: 8px;
-          margin: 25px 0;
-          text-align: center;
-        }
-        .contact-info h3 {
-          color: #1e293b;
-          margin-top: 0;
-        }
-        .footer {
-          background-color: #1f2937;
-          color: white;
-          padding: 25px;
-          text-align: center;
-          font-size: 14px;
-        }
-        .footer a {
-          color: #60a5fa;
-          text-decoration: none;
-        }
-        .button {
-          display: inline-block;
-          background-color: #1f2937;
-          color: white;
-          padding: 12px 24px;
-          text-decoration: none;
-          border-radius: 6px;
-          font-weight: 600;
-          margin: 15px 0;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>🚗 The Rental Den</h1>
-          <p>Your Booking Confirmation</p>
-        </div>
-        
-        <div class="content">
-          <div class="greeting">
-            Dear <strong>${customer_name}</strong>,
-          </div>
-          
-          <p>Thank you for choosing The Rental Den! We're excited to confirm your vehicle rental booking. Your reservation has been successfully submitted and is currently being processed.</p>
-          
-          <div class="booking-details">
-            <h3 style="margin-top: 0; color: #1f2937; font-size: 20px;">📋 Booking Details</h3>
-            
-            <div class="detail-row">
-              <span class="detail-label">Booking ID:</span>
-              <span class="detail-value"><strong>#${booking_id}</strong></span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Status:</span>
-              <span class="detail-value"><span class="status-badge">Pending Confirmation</span></span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Vehicle:</span>
-              <span class="detail-value"><strong>${vehicle_info}</strong></span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Pickup Date:</span>
-              <span class="detail-value">${new Date(rental_start_date).toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Return Date:</span>
-              <span class="detail-value">${new Date(rental_end_date).toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Pickup Location:</span>
-              <span class="detail-value">${pickup_location}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Rental Duration:</span>
-              <span class="detail-value">${Math.ceil((new Date(rental_end_date) - new Date(rental_start_date)) / (1000 * 60 * 60 * 24))} day(s)</span>
-            </div>
-          </div>
-          
-          <div class="total-price">
-            <div style="color: #374151; margin-bottom: 5px;">Total Amount</div>
-            <div class="amount">₱${total_price.toLocaleString()}</div>
-          </div>
-          
-          <div class="important-notes">
-            <h3>📌 Important Information</h3>
-            <ul>
-              <li><strong>Confirmation:</strong> Our team will contact you within 24 hours to confirm your booking and provide pickup instructions.</li>
-              <li><strong>Documentation:</strong> Please bring a valid driver's license and a government-issued ID on pickup day.</li>
-              <li><strong>Payment:</strong> Payment can be made upon pickup. We accept cash and major credit cards.</li>
-              <li><strong>Cancellation:</strong> Free cancellation up to 24 hours before your pickup date.</li>
-              <li><strong>Contact:</strong> For any questions or changes, please contact us immediately using the information below.</li>
-            </ul>
-          </div>
-          
-          <div class="contact-info">
-            <h3>📞 Need Help?</h3>
-            <p><strong>Phone:</strong> <a href="tel:+639123456789" style="color: #1f2937;">+63 912 345 6789</a></p>
-            <p><strong>Email:</strong> <a href="mailto:info@therentalden.com" style="color: #1f2937;">info@therentalden.com</a></p>
-            <p><strong>Business Hours:</strong> Monday - Sunday, 8:00 AM - 8:00 PM</p>
-          </div>
-          
-          <p style="text-align: center; margin-top: 30px;">
-            We look forward to serving you and making your journey memorable!
-          </p>
-        </div>
-        
-        <div class="footer">
-          <p><strong>The Rental Den</strong><br>
-          Your Premier Car Rental Service in Cebu<br>
-          <a href="mailto:info@therentalden.com">info@therentalden.com</a> | <a href="tel:+639123456789">+63 912 345 6789</a></p>
-          
-          <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
-            This is an automated message. Please do not reply directly to this email.
-          </p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-};
-
-const createAdminEmailTemplate = (bookingData) => {
-  const { 
-    customer_name, 
-    customer_email, 
-    customer_phone, 
-    vehicle_info, 
-    rental_start_date, 
-    rental_end_date, 
-    pickup_location, 
-    license_number,
-    total_price,
-    booking_id 
-  } = bookingData;
-
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>New Booking Alert - The Rental Den</title>
-      <style>
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          line-height: 1.6;
-          color: #333;
-          max-width: 600px;
-          margin: 0 auto;
-          background-color: #f8f9fa;
-        }
-        .container {
-          background-color: #ffffff;
-          padding: 0;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          overflow: hidden;
-        }
-        .header {
-          background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
-          color: white;
-          padding: 30px;
-          text-align: center;
-        }
-        .content {
-          padding: 30px;
-        }
-        .booking-details {
-          background-color: #f8fafc;
-          border: 2px solid #e2e8f0;
-          border-radius: 10px;
-          padding: 25px;
-          margin: 25px 0;
-        }
-        .detail-row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 12px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .detail-row:last-child {
-          border-bottom: none;
-          margin-bottom: 0;
-        }
-        .detail-label {
-          font-weight: 600;
-          color: #374151;
-          width: 40%;
-        }
-        .detail-value {
-          color: #1f2937;
-          width: 60%;
-          text-align: right;
-          font-weight: 500;
-        }
-        .urgent {
-          background-color: #fef2f2;
-          border: 2px solid #dc2626;
-          border-radius: 8px;
-          padding: 15px;
-          margin: 20px 0;
-          text-align: center;
-        }
-        .footer {
-          background-color: #374151;
-          color: white;
-          padding: 25px;
-          text-align: center;
-          font-size: 14px;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>🚨 New Booking Alert</h1>
-          <p>The Rental Den - Admin Notification</p>
-        </div>
-        
-        <div class="content">
-          <div class="urgent">
-            <strong>⚡ Action Required:</strong> New rental booking received and requires confirmation!
-          </div>
-          
-          <div class="booking-details">
-            <h3 style="margin-top: 0; color: #1f2937;">Customer Information</h3>
-            
-            <div class="detail-row">
-              <span class="detail-label">Booking ID:</span>
-              <span class="detail-value"><strong>#${booking_id}</strong></span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Customer Name:</span>
-              <span class="detail-value">${customer_name}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Email:</span>
-              <span class="detail-value">${customer_email}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Phone:</span>
-              <span class="detail-value">${customer_phone}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">License Number:</span>
-              <span class="detail-value">${license_number}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Vehicle:</span>
-              <span class="detail-value"><strong>${vehicle_info}</strong></span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Pickup Date:</span>
-              <span class="detail-value">${new Date(rental_start_date).toLocaleDateString()}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Return Date:</span>
-              <span class="detail-value">${new Date(rental_end_date).toLocaleDateString()}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Pickup Location:</span>
-              <span class="detail-value">${pickup_location}</span>
-            </div>
-            
-            <div class="detail-row">
-              <span class="detail-label">Total Amount:</span>
-              <span class="detail-value"><strong>₱${total_price.toLocaleString()}</strong></span>
-            </div>
-          </div>
-          
-          <p><strong>Next Steps:</strong></p>
-          <ul>
-            <li>Contact the customer within 24 hours to confirm booking</li>
-            <li>Verify vehicle availability for the requested dates</li>
-            <li>Update booking status in the admin system</li>
-            <li>Prepare vehicle for pickup if confirmed</li>
-          </ul>
-        </div>
-        
-        <div class="footer">
-          <p>The Rental Den Admin System<br>
-          <small>This is an automated notification from your booking system.</small></p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-};
-
-// Send booking confirmation emails
-app.post('/api/send-booking-emails', async (req, res) => {
-  try {
-    const bookingData = req.body;
-    
-    // Validate required fields
-    const requiredFields = [
-      'customer_name', 'customer_email', 'customer_phone', 
-      'vehicle_info', 'rental_start_date', 'rental_end_date', 
-      'pickup_location', 'license_number', 'total_price', 'booking_id'
-    ];
-    
-    for (const field of requiredFields) {
-      if (!bookingData[field]) {
-        return res.status(400).json({ 
-          success: false, 
-          error: `Missing required field: ${field}` 
-        });
-      }
-    }
-
-    // Email to customer
-    const customerMailOptions = {
-      from: {
-        name: 'The Rental Den',
-        address: process.env.EMAIL_USER,
-      },
-      to: bookingData.customer_email,
-      subject: `Booking Confirmation #${bookingData.booking_id} - The Rental Den`,
-      html: createCustomerEmailTemplate(bookingData),
-    };
-
-    // Email to admin
-    const adminMailOptions = {
-      from: {
-        name: 'The Rental Den System',
-        address: process.env.EMAIL_USER,
-      },
-      to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
-      subject: `🚨 New Booking Alert #${bookingData.booking_id} - Action Required`,
-      html: createAdminEmailTemplate(bookingData),
-    };
-
-    // Send emails
-    const customerEmailResult = await transporter.sendMail(customerMailOptions);
-    const adminEmailResult = await transporter.sendMail(adminMailOptions);
-
-    console.log('Customer email sent:', customerEmailResult.messageId);
-    console.log('Admin email sent:', adminEmailResult.messageId);
-
-    res.json({ 
-      success: true, 
-      message: 'Booking confirmation emails sent successfully',
-      customerEmailId: customerEmailResult.messageId,
-      adminEmailId: adminEmailResult.messageId
-    });
-
-  } catch (error) {
-    console.error('Error sending emails:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to send emails',
-      details: error.message
-    });
-  }
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'Email server is running',
-    timestamp: new Date().toISOString()
+const fmtDate = (d) => {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-PH", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
+};
+
+const fmtDateTime = (d) => {
+  if (!d) return "—";
+  return new Date(d).toLocaleString("en-PH", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+};
+
+const calcDays = (start, end) =>
+  Math.max(1, Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)));
+
+// Normalise vehicle name — works for both website payload and app payload
+const vehicleLine = (d) =>
+  [d.vehicleYear || d.vehicle_year, d.vehicleMake || d.vehicle_make, d.vehicleModel || d.vehicle_model]
+    .filter(Boolean).join(" ") || d.vehicle_info || "—";
+
+// Normalise booking id — website uses bookingId, app uses booking_id or id
+const bookingId = (d) => d.bookingId || d.booking_id || d.id || "—";
+
+// ─── Shared CSS ────────────────────────────────────────────────────────────────
+const css = `
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,Helvetica,sans-serif;background:#f1f5f9;color:#1e293b}
+  .wrap{max-width:620px;margin:24px auto}
+  .card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+  .hdr{padding:30px;text-align:center}
+  .hdr-icon{font-size:38px;margin-bottom:10px}
+  .hdr h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.3px}
+  .hdr p{font-size:14px;color:rgba(255,255,255,.85);margin-top:6px}
+  .body{padding:26px 28px}
+  .greeting{font-size:17px;color:#1e293b;margin-bottom:12px;font-weight:600}
+  .intro{font-size:14px;color:#475569;line-height:1.75;margin-bottom:22px}
+  .sec-title{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.9px;margin-bottom:8px;margin-top:18px}
+  .box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:4px}
+  .row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 14px;border-bottom:1px solid #f1f5f9}
+  .row:last-child{border-bottom:none}
+  .lbl{font-size:13px;color:#64748b;font-weight:500;width:43%}
+  .val{font-size:13px;color:#1e293b;font-weight:600;width:55%;text-align:right}
+  .val small{font-size:11px;font-weight:400;color:#94a3b8}
+  .price-row{background:#f0fdf4}
+  .price-row .lbl{font-weight:700;color:#15803d}
+  .price-row .val{font-size:16px;font-weight:800;color:#15803d}
+  .note{border-left:4px solid;border-radius:0 10px 10px 0;padding:14px 16px;margin-top:18px}
+  .note h4{font-size:13px;font-weight:700;margin-bottom:8px}
+  .note ul{padding-left:18px}
+  .note li{font-size:13px;line-height:1.8;color:#475569}
+  .contact-box{background:#f8fafc;border-radius:12px;padding:16px;text-align:center;margin-top:18px}
+  .contact-box h4{font-size:14px;font-weight:700;color:#1e293b;margin-bottom:7px}
+  .contact-box p{font-size:13px;color:#475569;line-height:1.9}
+  .contact-box a{color:#1e293b;font-weight:600;text-decoration:none}
+  .review-box{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:14px;padding:22px;text-align:center;margin-top:18px}
+  .review-box h3{font-size:18px;color:#15803d;margin-bottom:7px}
+  .review-box p{font-size:13px;color:#374151;margin-bottom:14px}
+  .stars{font-size:26px;letter-spacing:4px;margin:8px 0}
+  .cta{display:inline-block;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;color:#fff}
+  .contract-box{background:#fff7ed;border:1px solid #fed7aa;padding:18px;border-radius:10px;margin-top:18px}
+  .contract-box h4{font-size:13px;font-weight:700;color:#b45309;margin-bottom:8px}
+  .contract-box p{font-size:12px;color:#78350f;line-height:1.7;margin-bottom:8px}
+  .sig{margin-top:10px;padding-top:10px;border-top:1px solid #fed7aa;font-size:12px;color:#7c2d12}
+  .footer{background:#101010;padding:20px 28px;text-align:center}
+  .footer p{font-size:12px;color:#94a3b8;line-height:1.8}
+  .footer a{color:#60a5fa;text-decoration:none}
+</style>`;
+
+// ─── Shared Partials ──────────────────────────────────────────────────────────
+const hdr = (bg, icon, title, sub) =>
+  `<div class="hdr" style="background:${bg}"><div class="hdr-icon">${icon}</div><h1>${title}</h1><p>${sub}</p></div>`;
+
+const ftr = () =>
+  `<div class="footer">
+    <p><strong style="color:#e2e8f0">The Rental Den</strong><br>
+    Your Premier Car Rental Service in Cebu<br>
+    <a href="mailto:hello@rentalden.com">hello@rentalden.com</a> &nbsp;|&nbsp;
+    <a href="tel:+639000000000">+63 900 000 0000</a></p>
+    <p style="margin-top:8px;font-size:11px;opacity:.5">Automated message — please do not reply directly. &nbsp;© ${new Date().getFullYear()} The Rental Den</p>
+  </div>`;
+
+const contactBlock = () =>
+  `<div class="contact-box"><h4>📞 Need Help?</h4>
+  <p><a href="tel:+639000000000">+63 900 000 0000</a><br>
+  <a href="mailto:hello@rentalden.com">hello@rentalden.com</a><br>
+  Mon–Sun &nbsp; 8:00 AM – 8:00 PM</p></div>`;
+
+const wrap = (inner) =>
+  `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">${css}</head>
+  <body><div class="wrap"><div class="card">${inner}${ftr()}</div></div></body></html>`;
+
+// ─── Reusable Data Blocks ─────────────────────────────────────────────────────
+const bookingBlock = (d) => `
+  <p class="sec-title">📋 Booking Information</p>
+  <div class="box">
+    <div class="row"><span class="lbl">Booking ID</span><span class="val"><strong>#${bookingId(d)}</strong></span></div>
+    <div class="row"><span class="lbl">Vehicle</span><span class="val">${vehicleLine(d)}</span></div>
+    ${(d.variantColor || d.variant_color) ? `<div class="row"><span class="lbl">Color</span><span class="val">${d.variantColor || d.variant_color}</span></div>` : ""}
+    ${d.plate_number ? `<div class="row"><span class="lbl">Plate No.</span><span class="val">${d.plate_number}</span></div>` : ""}
+    <div class="row"><span class="lbl">Pickup Date</span><span class="val">${fmtDate(d.rental_start_date)}</span></div>
+    <div class="row"><span class="lbl">Return Date</span><span class="val">${fmtDate(d.rental_end_date)}</span></div>
+    <div class="row"><span class="lbl">Duration</span><span class="val">${calcDays(d.rental_start_date, d.rental_end_date)} day(s)</span></div>
+    <div class="row"><span class="lbl">${d.delivery_option === "deliver" ? "Delivery Address" : "Pickup Location"}</span>
+      <span class="val">${d.delivery_address || d.pickup_location || "—"}</span></div>
+    ${d.delivery_option ? `<div class="row"><span class="lbl">Service Type</span>
+      <span class="val">${d.delivery_option === "deliver" ? "🚗 Door-to-Door Delivery" : "🏠 Self Pickup"}</span></div>` : ""}
+    <div class="row"><span class="lbl">License No.</span><span class="val">${d.license_number || "—"}</span></div>
+    <div class="row"><span class="lbl">Phone</span><span class="val">${d.customer_phone || "—"}</span></div>
+  </div>`;
+
+const paymentBlock = (d) => {
+  const base    = parseFloat(d.total_price   || 0);
+  const fuel    = parseFloat(d.fuel_charge   || 0);
+  const delay   = parseFloat(d.delay_charge  || 0);
+  const damage  = parseFloat(d.damage_fee    || 0);
+  const deposit = parseFloat(d.deposit_amount || 0);
+  const grand   = base + fuel + delay + damage;
+  return `
+  <p class="sec-title">💰 Payment Breakdown</p>
+  <div class="box">
+    <div class="row"><span class="lbl">Base Rental</span><span class="val">${fmt(base)}</span></div>
+    ${fuel   > 0 ? `<div class="row"><span class="lbl">⛽ Fuel Charge</span><span class="val">${fmt(fuel)}</span></div>` : ""}
+    ${delay  > 0 ? `<div class="row"><span class="lbl">⏰ Delay Charge</span><span class="val">${fmt(delay)}</span></div>` : ""}
+    ${damage > 0 ? `<div class="row"><span class="lbl">🔧 Damage Fee</span><span class="val">${fmt(damage)}</span></div>` : ""}
+    ${deposit > 0 ? `<div class="row"><span class="lbl">🛡️ Security Deposit</span>
+      <span class="val">${fmt(deposit)} <small>(refundable)</small></span></div>` : ""}
+    <div class="row price-row"><span class="lbl">Total Amount</span><span class="val">${fmt(grand)}</span></div>
+  </div>`;
+};
+
+const payLogBlock = (log) => {
+  if (!Array.isArray(log) || log.length === 0) return "";
+  const total = log.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+  return `
+  <p class="sec-title">📜 Payment Log</p>
+  <div class="box">
+    ${log.map(e => `
+    <div class="row">
+      <span class="lbl">${e.event || "Payment"}<br>
+        <small style="color:#94a3b8">${fmtDateTime(e.recorded_at)}</small></span>
+      <span class="val" style="color:#15803d">${fmt(e.amount)}</span>
+    </div>`).join("")}
+    <div class="row price-row"><span class="lbl">Total Collected</span><span class="val">${fmt(total)}</span></div>
+  </div>`;
+};
+
+const contractBlock = (d) => {
+  const text = d.contractText || d.contract_text;
+  if (!text) return "";
+  const name = d.contractSignedName || d.contract_signed_name || "Not provided";
+  const at   = d.contractSignedAt   || d.contract_signed_at;
+  const paras = text.split(/\n{2,}/).map(p => `<p>${p}</p>`).join("");
+  return `
+  <div class="contract-box">
+    <h4>📄 Signed Rental Contract</h4>
+    ${paras}
+    <div class="sig">
+      <p><strong>Signed by:</strong> ${name}</p>
+      ${at ? `<p><strong>Signed on:</strong> ${fmtDateTime(at)}</p>` : ""}
+    </div>
+  </div>`;
+};
+
+const depositNote = (d, mode) => {
+  const amt = parseFloat(d.deposit_amount || 0);
+  if (amt <= 0) return "";
+  if (mode === "collect") return `
+  <div class="note" style="background:#f5f3ff;border-color:#c4b5fd">
+    <h4 style="color:#7c3aed">🛡️ Security Deposit Collected</h4>
+    <ul>
+      <li>Your deposit of <strong>${fmt(amt)}</strong> has been collected today.</li>
+      <li>It will be <strong>fully refunded</strong> upon vehicle retrieval, provided it is returned in good condition.</li>
+    </ul>
+  </div>`;
+  if (mode === "status") return `
+  <div class="note" style="background:${d.deposit_returned ? "#f0fdf4" : "#fef9c3"};border-color:${d.deposit_returned ? "#86efac" : "#fde047"}">
+    <h4 style="color:${d.deposit_returned ? "#15803d" : "#a16207"}">🛡️ Security Deposit</h4>
+    <ul>
+      <li>${d.deposit_returned
+        ? `✅ Your deposit of <strong>${fmt(amt)}</strong> has been <strong>returned</strong>. Thank you!`
+        : `Your deposit of <strong>${fmt(amt)}</strong> will be returned after the final vehicle inspection.`
+      }</li>
+    </ul>
+  </div>`;
+  return "";
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMAIL TEMPLATES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// 1. PENDING — new booking received (fired by website on submit)
+const tplPending = (d) => wrap(`
+  ${hdr("linear-gradient(135deg,#101010,#374151)", "🚗", "Booking Received!", "The Rental Den — We've got your request")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">Thank you for choosing <strong>The Rental Den</strong>! We've received your booking and our team will review it within <strong>24 hours</strong>.</p>
+    ${bookingBlock(d)}
+    ${paymentBlock(d)}
+    ${contractBlock(d)}
+    <div class="note" style="background:#fefce8;border-color:#fbbf24">
+      <h4 style="color:#b45309">⏳ What Happens Next?</h4>
+      <ul>
+        <li>Our team confirms your booking within <strong>24 hours</strong>.</li>
+        <li>Prepare a valid <strong>Driver's License</strong> and a government-issued ID.</li>
+        ${parseFloat(d.deposit_amount || 0) > 0 ? `<li>A refundable security deposit of <strong>${fmt(d.deposit_amount)}</strong> is required upon vehicle delivery.</li>` : ""}
+        <li>Free cancellation up to <strong>24 hours</strong> before your pickup date.</li>
+        ${d.delivery_option === "pickup" ? "<li>The owner's garage address will be shared once your booking is confirmed.</li>" : ""}
+        ${d.delivery_option === "deliver" ? "<li>Delivery fee is calculated by distance and charged when the vehicle arrives.</li>" : ""}
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+
+// 2. CONFIRMED
+const tplConfirmed = (d) => wrap(`
+  ${hdr("linear-gradient(135deg,#1d4ed8,#2563eb)", "✅", "Booking Confirmed!", "The Rental Den — Your reservation is set")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">Great news! Your booking has been <strong>confirmed</strong>. A driver will be assigned shortly and you'll receive another update.</p>
+    ${bookingBlock(d)}
+    ${paymentBlock(d)}
+    <div class="note" style="background:#eff6ff;border-color:#93c5fd">
+      <h4 style="color:#1d4ed8">📌 Before Your Pickup Date</h4>
+      <ul>
+        <li>Be available at your location on <strong>${fmtDate(d.rental_start_date)}</strong>.</li>
+        <li>Have your <strong>Driver's License</strong> and government ID ready.</li>
+        ${parseFloat(d.deposit_amount || 0) > 0 ? `<li>Prepare <strong>${fmt(d.deposit_amount)}</strong> cash for the refundable security deposit.</li>` : ""}
+        <li>Payment is collected upon vehicle delivery. We accept cash and cards.</li>
+        <li>To cancel, contact us at least <strong>24 hours</strong> in advance.</li>
+        ${d.delivery_option === "pickup" ? "<li>The exact pickup address will be provided to you separately.</li>" : ""}
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+
+// 3. DRIVER ASSIGNED
+const tplDriverAssigned = (d) => wrap(`
+  ${hdr("linear-gradient(135deg,#6d28d9,#7c3aed)", "👨‍✈️", "Driver Assigned!", "The Rental Den — Your driver is ready")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">A driver has been assigned to your booking. Please be ready at your location on the scheduled date.</p>
+    <p class="sec-title">🧑 Assigned Driver</p>
+    <div class="box">
+      <div class="row"><span class="lbl">Driver Name</span><span class="val"><strong>${d.assigned_driver || "—"}</strong></span></div>
+      ${d.assigned_driver_email ? `<div class="row"><span class="lbl">Driver Email</span><span class="val">${d.assigned_driver_email}</span></div>` : ""}
+    </div>
+    ${bookingBlock(d)}
+    ${paymentBlock(d)}
+    <div class="note" style="background:#faf5ff;border-color:#c4b5fd">
+      <h4 style="color:#7c3aed">🚗 Delivery Day Reminders</h4>
+      <ul>
+        <li>Keep your phone on — your driver will call before arriving.</li>
+        <li>Have your <strong>Driver's License</strong> and government ID ready for verification.</li>
+        ${parseFloat(d.deposit_amount || 0) > 0 ? `<li>Prepare <strong>${fmt(d.deposit_amount)}</strong> cash for the security deposit upon delivery.</li>` : ""}
+        <li>Inspect the vehicle carefully before signing off.</li>
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+
+// 4. ONGOING — driver en route
+const tplOngoing = (d) => wrap(`
+  ${hdr("linear-gradient(135deg,#b45309,#d97706)", "🚙", "Vehicle On Its Way!", "The Rental Den — Driver is en route")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">Your driver is now <strong>on the way</strong> to deliver your vehicle. Please be ready — the driver will call upon arrival.</p>
+    <p class="sec-title">🧑 Your Driver</p>
+    <div class="box">
+      <div class="row"><span class="lbl">Driver</span><span class="val"><strong>${d.assigned_driver || "—"}</strong></span></div>
+      <div class="row"><span class="lbl">Going To</span><span class="val">${d.delivery_address || d.pickup_location || "—"}</span></div>
+    </div>
+    ${bookingBlock(d)}
+    ${paymentBlock(d)}
+    <div class="note" style="background:#fefce8;border-color:#fbbf24">
+      <h4 style="color:#b45309">💳 Payment Due Upon Delivery</h4>
+      <ul>
+        <li>Rental total: <strong>${fmt(d.total_price)}</strong></li>
+        ${parseFloat(d.deposit_amount || 0) > 0 ? `<li>Security deposit: <strong>${fmt(d.deposit_amount)}</strong> — fully refunded at retrieval.</li>` : ""}
+        ${parseFloat(d.partial_payment || 0) > 0 ? `<li>Partial payment already recorded: <strong>${fmt(d.partial_payment)}</strong></li>` : ""}
+        <li>We accept <strong>cash and major credit cards</strong>.</li>
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+
+// 5. DELIVERED — vehicle handed over, show collected payments
+const tplDelivered = (d) => wrap(`
+  ${hdr("linear-gradient(135deg,#be185d,#ec4899)", "📦", "Vehicle Delivered!", "The Rental Den — Enjoy your ride")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">Your vehicle has been successfully <strong>delivered</strong>! Below is your complete rental summary and what was collected today.</p>
+    ${bookingBlock(d)}
+    ${paymentBlock(d)}
+    ${payLogBlock(d.payment_log)}
+    ${depositNote(d, "collect")}
+    <div class="note" style="background:#f0fdf4;border-color:#86efac">
+      <h4 style="color:#15803d">📋 During Your Rental</h4>
+      <ul>
+        <li>Adhere to traffic rules and all agreed rental terms.</li>
+        <li>Do not sublet the vehicle to another person.</li>
+        <li>Contact us immediately in case of emergency or accident.</li>
+        <li>Return the vehicle with the same fuel level as received.</li>
+        <li>Return on or before: <strong>${fmtDate(d.rental_end_date)}</strong></li>
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+
+// 6. RETRIEVED — vehicle returned, show full payment summary
+const tplRetrieved = (d) => wrap(`
+  ${hdr("linear-gradient(135deg,#0e7490,#0891b2)", "🔁", "Vehicle Retrieved", "The Rental Den — Final payment summary")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">Your vehicle has been successfully <strong>retrieved</strong>. Thank you for choosing The Rental Den! Here is your complete payment summary.</p>
+    ${bookingBlock(d)}
+    ${paymentBlock(d)}
+    ${payLogBlock(d.payment_log)}
+    ${depositNote(d, "status")}
+    <div class="note" style="background:#eff6ff;border-color:#93c5fd">
+      <h4 style="color:#1d4ed8">⭐ We'd Love Your Feedback!</h4>
+      <ul>
+        <li>Once your booking is marked <strong>completed</strong>, you'll receive a direct link to rate and review your experience.</li>
+        <li>Your feedback helps us serve you better!</li>
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+
+// 7. COMPLETED — final receipt + star review CTA
+const tplCompleted = (d) => {
+  const reviewUrl = d.review_url || `https://therentalden.com/review?booking=${bookingId(d)}`;
+  return wrap(`
+  ${hdr("linear-gradient(135deg,#059669,#10b981)", "🏁", "Rental Completed!", "The Rental Den — Thank you for riding with us")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">Your rental has been officially <strong>completed</strong>. It was a pleasure serving you! Below is your final receipt.</p>
+    ${bookingBlock(d)}
+    ${paymentBlock(d)}
+    ${payLogBlock(d.payment_log)}
+    ${depositNote(d, "status")}
+    <div class="review-box">
+      <div class="stars">⭐⭐⭐⭐⭐</div>
+      <h3>How was your experience?</h3>
+      <p>Take 1 minute to rate your ride and leave a review — it means the world to us and helps us keep improving!</p>
+      <a href="${reviewUrl}" class="cta" style="background:#15803d">⭐ Rate &amp; Review Your Rental</a>
+    </div>
+    <div class="note" style="background:#f8fafc;border-color:#e2e8f0">
+      <h4 style="color:#374151">🎉 Rent With Us Again!</h4>
+      <ul>
+        <li>We'd love to have you back. Contact us anytime to check availability.</li>
+        <li>Follow us for exclusive deals and promotions.</li>
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+};
+
+// 8. CANCELLED
+const tplCancelled = (d) => wrap(`
+  ${hdr("linear-gradient(135deg,#991b1b,#ef4444)", "🚫", "Booking Cancelled", "The Rental Den — Cancellation Notice")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">Your booking <strong>#${bookingId(d)}</strong> has been <strong>cancelled</strong>. We're sorry about this.</p>
+    ${bookingBlock(d)}
+    <div class="note" style="background:#fef2f2;border-color:#fca5a5">
+      <h4 style="color:#dc2626">📋 Cancellation Details</h4>
+      <ul>
+        <li>Cancelled on: <strong>${fmtDateTime(new Date().toISOString())}</strong></li>
+        ${d.decline_reason ? `<li>Reason: <strong>${d.decline_reason}</strong></li>` : ""}
+        ${parseFloat(d.deposit_amount || 0) > 0 ? `<li>Any collected deposit will be refunded within <strong>3–5 business days</strong>.</li>` : ""}
+        <li>Feel free to book again whenever you're ready!</li>
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+
+// 9. DECLINED
+const tplDeclined = (d) => wrap(`
+  ${hdr("linear-gradient(135deg,#c2410c,#f97316)", "❌", "Booking Declined", "The Rental Den — Booking Not Approved")}
+  <div class="body">
+    <p class="greeting">Dear ${d.customer_name},</p>
+    <p class="intro">We regret that your booking <strong>#${bookingId(d)}</strong> has been <strong>declined</strong>. We sincerely apologize for the inconvenience.</p>
+    ${bookingBlock(d)}
+    <div class="note" style="background:#fff7ed;border-color:#fdba74">
+      <h4 style="color:#c2410c">📋 Reason for Decline</h4>
+      <ul>
+        <li>${d.decline_reason || "No specific reason provided. Please contact us for more information."}</li>
+        ${parseFloat(d.deposit_amount || 0) > 0 ? `<li>Any collected deposit will be refunded within <strong>3–5 business days</strong>.</li>` : ""}
+        <li>Please contact us to discuss alternatives or rebook.</li>
+      </ul>
+    </div>
+    ${contactBlock()}
+  </div>`);
+
+// ─── Template Router ───────────────────────────────────────────────────────────
+const getTemplate = (event, d) => {
+  const ev = (event || "").toLowerCase().trim();
+  const id = bookingId(d);
+  const map = {
+    pending:         { subject: `Booking Received #${id} – The Rental Den`,             html: tplPending(d)        },
+    confirmed:       { subject: `✅ Booking Confirmed #${id} – The Rental Den`,          html: tplConfirmed(d)      },
+    driver_assigned: { subject: `👨‍✈️ Driver Assigned – Booking #${id}`,               html: tplDriverAssigned(d) },
+    ongoing:         { subject: `🚙 Your Vehicle is On Its Way! – #${id}`,              html: tplOngoing(d)        },
+    delivered:       { subject: `📦 Vehicle Delivered – Booking #${id}`,                html: tplDelivered(d)      },
+    retrieved:       { subject: `🔁 Vehicle Retrieved – Final Summary #${id}`,          html: tplRetrieved(d)      },
+    completed:       { subject: `🏁 Rental Complete – Leave a Review! #${id}`,          html: tplCompleted(d)      },
+    cancelled:       { subject: `🚫 Booking Cancelled #${id} – The Rental Den`,         html: tplCancelled(d)      },
+    declined:        { subject: `❌ Booking Declined #${id} – The Rental Den`,          html: tplDeclined(d)       },
+  };
+  return map[ev] || map["pending"];
+};
+
+const sendMail = (to, subject, html) =>
+  transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, html });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROUTES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/send-booking-email
+ * ─── Used by the WEBSITE (RentalModal submitBooking) ───────────────────────
+ * Fires the "pending" (booking received) template.
+ * Accepts the exact body the website already sends — no changes needed there.
+ */
+app.post("/api/send-booking-email", async (req, res) => {
+  try {
+    const d = req.body;
+    if (!d.customer_email || !d.customer_name) {
+      return res.status(400).json({ error: "Missing required booking data" });
+    }
+    const { subject, html } = getTemplate("pending", d);
+    await sendMail(d.customer_email, subject, html);
+    res.status(200).json({ success: true, message: "Confirmation email sent successfully" });
+  } catch (err) {
+    console.error("Email error:", err);
+    res.status(500).json({ success: false, error: "Failed to send email", details: err.message });
+  }
 });
 
-// Start server
+/**
+ * POST /api/send-status-update
+ * ─── Used by the MOBILE APP (BookingsScreen) ──────────────────────────────
+ * Fires the matching email template based on the `event` field.
+ *
+ * Required:  event, customer_email, customer_name
+ * Optional:  all other booking fields (include as many as possible for
+ *            full transparency in the email)
+ *
+ * event values:
+ *   confirmed | driver_assigned | ongoing | delivered |
+ *   retrieved | completed | cancelled | declined
+ */
+app.post("/api/send-status-update", async (req, res) => {
+  try {
+    const d = req.body;
+    if (!d.customer_email) return res.status(400).json({ success: false, error: "Missing customer_email" });
+    if (!d.event)          return res.status(400).json({ success: false, error: "Missing event field" });
+
+    const { subject, html } = getTemplate(d.event, d);
+    await sendMail(d.customer_email, subject, html);
+    res.status(200).json({ success: true, message: `Email sent for event: ${d.event}` });
+  } catch (err) {
+    console.error("Email error:", err);
+    res.status(500).json({ success: false, error: "Failed to send email", details: err.message });
+  }
+});
+
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "Email service is running", timestamp: new Date().toISOString() });
+});
+
 app.listen(PORT, () => {
-  console.log(`Email server running on port ${PORT}`);
+  console.log(`Email service running on port ${PORT}`);
 });

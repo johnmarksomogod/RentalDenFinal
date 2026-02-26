@@ -22,48 +22,60 @@ const formatCurrency = (a) =>
 const formatDate = (d) =>
   new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 
-// ─── Status colours — matching BookingScreen exactly ─────────────────────────
-const STATUS_COLOR = {
-  pending:   '#f59e0b',
-  confirmed: '#10b981',
-  ongoing:   '#3b82f6',
-  delivered: '#8b5cf6',
-  retrieved: '#06b6d4',
-  completed: '#6366f1',
-  cancelled: '#ef4444',
-  declined:  '#f97316',
+// ─── Design tokens — single source of truth for colours ──────────────────────
+const C = {
+  ink:        '#111827',
+  inkSoft:    '#374151',
+  muted:      '#6b7280',
+  subtle:     '#9ca3af',
+  border:     '#e5e7eb',
+  borderSoft: '#f3f4f6',
+  surface:    '#f9fafb',
+  white:      '#ffffff',
+  // status
+  pending:    '#f59e0b',
+  confirmed:  '#10b981',
+  ongoing:    '#3b82f6',
+  delivered:  '#8b5cf6',
+  retrieved:  '#06b6d4',
+  completed:  '#6366f1',
+  cancelled:  '#ef4444',
+  declined:   '#f97316',
+  // category accents
+  driver:     '#7c3aed',
+  booking:    '#0ea5e9',
+  charge:     '#10b981',
+  alert:      '#ef4444',
+  unread:     '#f59e0b',
 };
-const getStatusColor = (s) => STATUS_COLOR[s] || '#6b7280';
 
-// ─── Notification filter tabs ─────────────────────────────────────────────────
+const STATUS_COLOR = {
+  pending: C.pending, confirmed: C.confirmed, ongoing: C.ongoing,
+  delivered: C.delivered, retrieved: C.retrieved, completed: C.completed,
+  cancelled: C.cancelled, declined: C.declined,
+};
+const getStatusColor = (s) => STATUS_COLOR[s] || C.muted;
+
+// ─── Category tab definitions ─────────────────────────────────────────────────
 const NOTIF_FILTERS = [
-  { key: 'all',      label: 'All',      icon: 'apps-outline' },
-  { key: 'booking',  label: 'Bookings', icon: 'document-text-outline' },
-  { key: 'delivery', label: 'Driver',   icon: 'car-outline' },
-  { key: 'charges',  label: 'Charges',  icon: 'cash-outline' },
-  { key: 'alert',    label: 'Alerts',   icon: 'alert-circle-outline' },
-  { key: 'unread',   label: 'Unread',   icon: 'ellipse-outline' },
+  { key: 'all',      label: 'All',      icon: 'apps-outline',          accent: C.inkSoft },
+  { key: 'booking',  label: 'Bookings', icon: 'document-text-outline', accent: C.booking },
+  { key: 'delivery', label: 'Driver',   icon: 'car-outline',           accent: C.driver },
+  { key: 'charges',  label: 'Charges',  icon: 'cash-outline',          accent: C.charge },
+  { key: 'alert',    label: 'Alerts',   icon: 'alert-circle-outline',  accent: C.alert },
+  { key: 'unread',   label: 'Unread',   icon: 'ellipse',               accent: C.unread },
 ];
 
-// charge-type notification keys
 const CHARGE_TYPES = [
-  'driver_payment', 'driver_damage', 'driver_fuel',
-  'driver_delay', 'driver_extra_km', 'driver_extra_hours',
+  'driver_payment','driver_damage','driver_fuel',
+  'driver_delay','driver_extra_km','driver_extra_hours',
 ];
-
-const isChargeType = (type) => CHARGE_TYPES.includes(type);
 
 const getNotifFilter = (type) => {
-  // Charge types get their own category
   if (CHARGE_TYPES.includes(type)) return 'charges';
-  // Driver status updates (not charges)
-  if (['driver_ongoing', 'driver_delivered', 'driver_retrieved', 'status_change'].includes(type))
-    return 'delivery';
-  // Booking lifecycle
-  if (['new_booking', 'booking_confirmed', 'booking_completed',
-       'booking_cancelled', 'booking_declined',
-       'pickup_today', 'return_today', 'upcoming_pickup', 'due_return'].includes(type))
-    return 'booking';
+  if (['driver_ongoing','driver_delivered','driver_retrieved','status_change'].includes(type)) return 'delivery';
+  if (['new_booking','booking_confirmed','booking_completed','booking_cancelled',
+       'booking_declined','pickup_today','return_today','upcoming_pickup','due_return'].includes(type)) return 'booking';
   if (['overdue'].includes(type)) return 'alert';
   return 'booking';
 };
@@ -90,7 +102,11 @@ const NotificationBell = ({ notifications, onPress }) => {
   return (
     <TouchableOpacity style={styles.notificationBell} onPress={onPress}>
       <Animated.View style={{ transform: [{ rotate }] }}>
-        <Ionicons name={unread > 0 ? 'notifications' : 'notifications-outline'} size={24} color={unread > 0 ? '#f59e0b' : '#222'} />
+        <Ionicons
+          name={unread > 0 ? 'notifications' : 'notifications-outline'}
+          size={24}
+          color={unread > 0 ? C.unread : C.ink}
+        />
       </Animated.View>
       {unread > 0 && (
         <View style={styles.notificationBadge}>
@@ -109,35 +125,35 @@ const NotificationItem = ({ notification, onMarkRead, onRemove, setActionModalCo
 
   const getNotificationIcon = (type) => {
     const map = {
-      // Booking lifecycle
-      upcoming_pickup:    { name: 'car-sport',          color: '#10b981' },
-      due_return:         { name: 'return-up-back',     color: '#f59e0b' },
-      overdue:            { name: 'alert-circle',       color: '#ef4444' },
-      pickup_today:       { name: 'today',              color: '#3b82f6' },
-      return_today:       { name: 'calendar',           color: '#8b5cf6' },
-      new_booking:        { name: 'add-circle',         color: '#f59e0b' },
-      booking_confirmed:  { name: 'checkmark-circle',   color: '#10b981' },
-      booking_completed:  { name: 'flag-outline',       color: '#6366f1' },
-      booking_cancelled:  { name: 'close-circle',       color: '#ef4444' },
-      booking_declined:   { name: 'ban',                color: '#f97316' },
-      status_change:      { name: 'swap-horizontal',    color: '#8b5cf6' },
-      // Driver delivery updates
-      driver_ongoing:     { name: 'navigate',           color: '#3b82f6' },
-      driver_delivered:   { name: 'car',                color: '#8b5cf6' },
-      driver_retrieved:   { name: 'return-down-back',   color: '#06b6d4' },
-      // Driver charges
-      driver_payment:     { name: 'cash',               color: '#10b981' },
-      driver_damage:      { name: 'warning',            color: '#ef4444' },
-      driver_fuel:        { name: 'water',              color: '#f59e0b' },
-      driver_delay:       { name: 'time',               color: '#f97316' },
-      driver_extra_km:    { name: 'speedometer',        color: '#8b5cf6' },
-      driver_extra_hours: { name: 'hourglass',          color: '#06b6d4' },
+      upcoming_pickup:    { name: 'car-sport',        color: C.confirmed },
+      due_return:         { name: 'return-up-back',   color: C.pending },
+      overdue:            { name: 'alert-circle',     color: C.cancelled },
+      pickup_today:       { name: 'today',            color: C.ongoing },
+      return_today:       { name: 'calendar',         color: C.delivered },
+      new_booking:        { name: 'add-circle',       color: C.pending },
+      booking_confirmed:  { name: 'checkmark-circle', color: C.confirmed },
+      booking_completed:  { name: 'flag-outline',     color: C.completed },
+      booking_cancelled:  { name: 'close-circle',     color: C.cancelled },
+      booking_declined:   { name: 'ban',              color: C.declined },
+      status_change:      { name: 'swap-horizontal',  color: C.delivered },
+      driver_ongoing:     { name: 'navigate',         color: C.ongoing },
+      driver_delivered:   { name: 'car',              color: C.delivered },
+      driver_retrieved:   { name: 'return-down-back', color: C.retrieved },
+      driver_payment:     { name: 'cash',             color: C.charge },
+      driver_damage:      { name: 'warning',          color: C.cancelled },
+      driver_fuel:        { name: 'water',            color: C.pending },
+      driver_delay:       { name: 'time',             color: C.declined },
+      driver_extra_km:    { name: 'speedometer',      color: C.delivered },
+      driver_extra_hours: { name: 'hourglass',        color: C.retrieved },
     };
-    return map[type] || { name: 'information-circle', color: '#6b7280' };
+    return map[type] || { name: 'information-circle', color: C.muted };
   };
 
-  const icon = getNotificationIcon(notification.type);
-  const isDelivery = getNotifFilter(notification.type) === 'delivery';
+  const icon       = getNotificationIcon(notification.type);
+  const filterType = getNotifFilter(notification.type);
+  const isDelivery = filterType === 'delivery';
+  const isCharge   = filterType === 'charges';
+  const leftBorder = isDelivery ? C.driver : isCharge ? C.charge : !notification.read ? C.unread : 'transparent';
 
   return (
     <View style={styles.notificationWrapper}>
@@ -146,28 +162,36 @@ const NotificationItem = ({ notification, onMarkRead, onRemove, setActionModalCo
           styles.notificationItem,
           !notification.read && styles.unreadNotification,
           showActions && styles.notificationItemActive,
-          isDelivery && styles.deliveryNotification,
+          { borderLeftColor: leftBorder, borderLeftWidth: leftBorder !== 'transparent' ? 3 : 0 },
         ]}
         onPress={() => { onMarkRead(notification.id); if (notification.bookingId && onNavigateToBooking) onNavigateToBooking(notification.bookingId); }}
         onLongPress={() => setShowActions(true)}
         delayLongPress={500}
       >
-        <View style={[styles.notificationIconContainer, { backgroundColor: icon.color + '20' }]}>
-          <Ionicons name={icon.name} size={20} color={icon.color} />
+        <View style={[styles.notifIconWrap, { backgroundColor: icon.color + '18' }]}>
+          <Ionicons name={icon.name} size={19} color={icon.color} />
         </View>
         <View style={styles.notificationContent}>
-          {isDelivery && (
-            <View style={styles.deliveryBadgeRow}>
-              <View style={styles.deliveryBadge}>
-                <Ionicons name="car-outline" size={10} color="#8b5cf6" />
-                <Text style={styles.deliveryBadgeTxt}>Driver Update</Text>
-              </View>
-              {notification.driver_name ? (
-                <View style={styles.driverNameBadge}>
-                  <Ionicons name="person" size={10} color="#065f46" />
-                  <Text style={styles.driverNameBadgeTxt}>{notification.driver_name}</Text>
+          {(isDelivery || isCharge || notification.driver_name) && (
+            <View style={styles.notifBadgeRow}>
+              {isDelivery && (
+                <View style={[styles.catBadge, { backgroundColor: C.driver + '14', borderColor: C.driver + '30' }]}>
+                  <Ionicons name="car-outline" size={9} color={C.driver} />
+                  <Text style={[styles.catBadgeTxt, { color: C.driver }]}>Driver</Text>
                 </View>
-              ) : null}
+              )}
+              {isCharge && (
+                <View style={[styles.catBadge, { backgroundColor: C.charge + '14', borderColor: C.charge + '30' }]}>
+                  <Ionicons name="cash-outline" size={9} color={C.charge} />
+                  <Text style={[styles.catBadgeTxt, { color: C.charge }]}>Charge</Text>
+                </View>
+              )}
+              {notification.driver_name && (
+                <View style={[styles.catBadge, { backgroundColor: '#d1fae5', borderColor: '#a7f3d0' }]}>
+                  <Ionicons name="person" size={9} color="#059669" />
+                  <Text style={[styles.catBadgeTxt, { color: '#059669' }]}>{notification.driver_name}</Text>
+                </View>
+              )}
             </View>
           )}
           <Text style={styles.notificationTitle}>{notification.title}</Text>
@@ -176,31 +200,38 @@ const NotificationItem = ({ notification, onMarkRead, onRemove, setActionModalCo
         </View>
         {!notification.read && <View style={styles.unreadDot} />}
         <TouchableOpacity style={styles.notificationMenuButton} onPress={() => setShowActions(!showActions)}>
-          <Ionicons name="ellipsis-vertical" size={16} color="#9ca3af" />
+          <Ionicons name="ellipsis-vertical" size={15} color={C.subtle} />
         </TouchableOpacity>
       </TouchableOpacity>
 
       {showActions && (
         <View style={styles.notificationActions}>
           {!notification.read && (
-            <TouchableOpacity style={[styles.notificationActionButton, styles.markReadButton]} onPress={() => { onMarkRead(notification.id); setShowActions(false); }}>
-              <Ionicons name="checkmark-circle-outline" size={16} color="#10b981" />
-              <Text style={[styles.notificationActionText, { color: '#10b981' }]}>Mark read</Text>
+            <TouchableOpacity style={[styles.notifActionBtn, { backgroundColor: '#dcfce7' }]}
+              onPress={() => { onMarkRead(notification.id); setShowActions(false); }}>
+              <Ionicons name="checkmark-circle-outline" size={14} color={C.confirmed} />
+              <Text style={[styles.notifActionTxt, { color: C.confirmed }]}>Mark read</Text>
             </TouchableOpacity>
           )}
           {notification.bookingId && (
-            <TouchableOpacity style={[styles.notificationActionButton, styles.viewBookingButton]} onPress={() => { if (onNavigateToBooking) onNavigateToBooking(notification.bookingId); setShowActions(false); }}>
-              <Ionicons name="eye-outline" size={16} color="#3b82f6" />
-              <Text style={[styles.notificationActionText, { color: '#3b82f6' }]}>View Booking</Text>
+            <TouchableOpacity style={[styles.notifActionBtn, { backgroundColor: '#eff6ff' }]}
+              onPress={() => { if (onNavigateToBooking) onNavigateToBooking(notification.bookingId); setShowActions(false); }}>
+              <Ionicons name="eye-outline" size={14} color={C.ongoing} />
+              <Text style={[styles.notifActionTxt, { color: C.ongoing }]}>View Booking</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={[styles.notificationActionButton, styles.removeButton]} onPress={() => { setActionModalConfig({ title: 'Remove Notification', message: 'Remove this notification?', onConfirm: () => { onRemove(notification.id); setShowActions(false); } }); }}>
-            <Ionicons name="trash-outline" size={16} color="#ef4444" />
-            <Text style={[styles.notificationActionText, { color: '#ef4444' }]}>Remove</Text>
+          <TouchableOpacity style={[styles.notifActionBtn, { backgroundColor: '#fee2e2' }]}
+            onPress={() => {
+              setActionModalConfig({ title: 'Remove Notification', message: 'Remove this notification?',
+                onConfirm: () => { onRemove(notification.id); setShowActions(false); } });
+            }}>
+            <Ionicons name="trash-outline" size={14} color={C.cancelled} />
+            <Text style={[styles.notifActionTxt, { color: C.cancelled }]}>Remove</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.notificationActionButton, styles.cancelButton]} onPress={() => setShowActions(false)}>
-            <Ionicons name="close-outline" size={16} color="#6b7280" />
-            <Text style={[styles.notificationActionText, { color: '#6b7280' }]}>Cancel</Text>
+          <TouchableOpacity style={[styles.notifActionBtn, { backgroundColor: C.surface }]}
+            onPress={() => setShowActions(false)}>
+            <Ionicons name="close-outline" size={14} color={C.muted} />
+            <Text style={[styles.notifActionTxt, { color: C.muted }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -209,148 +240,189 @@ const NotificationItem = ({ notification, onMarkRead, onRemove, setActionModalCo
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NotificationsModal — category tabs + tappable driver name pills
+// NotificationsModal — REDESIGNED
+//
+//  ┌────────────────────────────────────────┐
+//  │  Header (title · unread count · btns) │
+//  ├────────────────────────────────────────┤
+//  │  ROW 1: Driver pills                  │  ← tapping one SCOPES everything
+//  │  [All Drivers] [Juan] [Pedro] …       │
+//  │  ─ active driver context bar ─        │
+//  ├────────────────────────────────────────┤
+//  │  ROW 2: Category tabs                 │  ← filters WITHIN scoped pool
+//  │  [All] [Bookings] [Driver] [Charges]… │
+//  ├────────────────────────────────────────┤
+//  │  Notification list                    │
+//  └────────────────────────────────────────┘
 // ─────────────────────────────────────────────────────────────────────────────
-const NotificationsModal = ({ visible, notifications, onClose, onMarkRead, onMarkAllRead, onRemove, setActionModalConfig, onClearAll, onNavigateToBooking }) => {
-  // activeFilter: 'all' | 'booking' | 'delivery' | 'charges' | 'alert' | 'unread'
-  //              | 'driver:<name>'  ← tapping a driver pill sets this
-  const [activeFilter, setActiveFilter] = useState('all');
+const NotificationsModal = ({
+  visible, notifications, onClose,
+  onMarkRead, onMarkAllRead, onRemove,
+  setActionModalConfig, onClearAll, onNavigateToBooking,
+}) => {
+  const [selectedDriver, setSelectedDriver] = useState(null); // null = All Drivers
+  const [activeCategory, setActiveCategory] = useState('all');
 
-  // ── Collect all unique driver names that appear in notifications ────────────
-  const driverNames = [...new Set(
-    notifications
-      .filter(n => n.driver_name)
-      .map(n => n.driver_name)
-  )].sort();
+  // Reset on open
+  useEffect(() => { if (visible) { setSelectedDriver(null); setActiveCategory('all'); } }, [visible]);
 
-  // ── Resolve which notifications to show for the active filter ──────────────
-  const filtered = notifications.filter(n => {
-    if (activeFilter === 'all')                        return true;
-    if (activeFilter === 'unread')                     return !n.read;
-    if (activeFilter.startsWith('driver:')) {
-      // Show ALL notifications (any type) that belong to this driver
-      const dName = activeFilter.slice(7);
-      return n.driver_name === dName;
-    }
-    return getNotifFilter(n.type) === activeFilter;
+  // 1. Unique driver names
+  const driverNames = [...new Set(notifications.filter(n => n.driver_name).map(n => n.driver_name))].sort();
+
+  // 2. Scope by selected driver
+  const scopedPool = selectedDriver
+    ? notifications.filter(n => n.driver_name === selectedDriver)
+    : notifications;
+
+  // 3. Category filter within scoped pool
+  const visibleNotifs = scopedPool.filter(n => {
+    if (activeCategory === 'all')    return true;
+    if (activeCategory === 'unread') return !n.read;
+    return getNotifFilter(n.type) === activeCategory;
   });
 
-  // ── For Delivery category — group the list by driver name ──────────────────
-  const isDriverCategory = activeFilter === 'delivery';
-  const deliveryGrouped  = isDriverCategory
-    ? filtered.reduce((acc, n) => {
-        const key = n.driver_name || 'Unassigned';
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(n);
-        return acc;
-      }, {})
-    : null;
-
-  // ── Banner counts ──────────────────────────────────────────────────────────
-  const unreadDelivery = notifications.filter(n => !n.read && getNotifFilter(n.type) === 'delivery').length;
-  const unreadCharges  = notifications.filter(n => !n.read && getNotifFilter(n.type) === 'charges').length;
-  const newDriverAlert = unreadDelivery + unreadCharges;
-
-  // ── Active driver name (when a pill is selected) ───────────────────────────
-  const activeDriverName = activeFilter.startsWith('driver:') ? activeFilter.slice(7) : null;
-
-  const renderList = (data) => (
-    <FlatList
-      data={data}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <NotificationItem
-          notification={item}
-          onMarkRead={onMarkRead}
-          onRemove={onRemove}
-          setActionModalConfig={setActionModalConfig}
-          onNavigateToBooking={onNavigateToBooking}
-        />
-      )}
-      contentContainerStyle={styles.notificationsList}
-      showsVerticalScrollIndicator={false}
-      ListEmptyComponent={
-        <View style={styles.emptyNotifications}>
-          <Ionicons name="notifications-off-outline" size={48} color="#d1d5db" />
-          <Text style={styles.emptyNotificationsText}>No notifications</Text>
-          <Text style={styles.emptyNotificationsSubtext}>
-            {activeDriverName
-              ? `No notifications for ${activeDriverName}`
-              : activeFilter === 'all'
-              ? "You're all caught up!"
-              : `No ${activeFilter} notifications`}
-          </Text>
-        </View>
-      }
-    />
-  );
+  const getCatCount    = (key) => key === 'all' ? scopedPool.length : key === 'unread' ? scopedPool.filter(n => !n.read).length : scopedPool.filter(n => getNotifFilter(n.type) === key).length;
+  const totalUnread    = notifications.filter(n => !n.read).length;
+  const driverUnread   = (name) => notifications.filter(n => n.driver_name === name && !n.read).length;
+  const driverTotal    = (name) => notifications.filter(n => n.driver_name === name).length;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalContainer}>
 
-        {/* ── Header ── */}
-        <View style={styles.modalHeader}>
+        {/* ── HEADER ── */}
+        <View style={styles.notifHeader}>
           <View>
-            <Text style={styles.modalTitle}>Notifications</Text>
-            <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-              {notifications.filter(n => !n.read).length} unread · {notifications.length} total
+            <Text style={styles.notifHeaderTitle}>Notifications</Text>
+            <Text style={styles.notifHeaderSub}>
+              {totalUnread > 0 ? `${totalUnread} unread · ` : ''}{notifications.length} total
             </Text>
           </View>
-          <View style={styles.modalHeaderActions}>
-            <TouchableOpacity style={styles.markAllReadButton} onPress={onMarkAllRead}>
-              <Text style={styles.markAllReadText}>Mark all read</Text>
+          <View style={styles.notifHeaderActions}>
+            <TouchableOpacity style={styles.notifHeaderBtn} onPress={onMarkAllRead}>
+              <Ionicons name="checkmark-done-outline" size={14} color={C.inkSoft} />
+              <Text style={styles.notifHeaderBtnTxt}>Read all</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.clearAllButton} onPress={onClearAll}>
-              <Text style={styles.clearAllText}>Clear all</Text>
+            <TouchableOpacity style={[styles.notifHeaderBtn, { backgroundColor: '#fee2e2', borderColor: '#fecaca' }]} onPress={onClearAll}>
+              <Ionicons name="trash-outline" size={14} color={C.cancelled} />
+              <Text style={[styles.notifHeaderBtnTxt, { color: C.cancelled }]}>Clear</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Ionicons name="close" size={24} color="#222" />
+            <TouchableOpacity style={styles.notifCloseBtn} onPress={onClose}>
+              <Ionicons name="close" size={18} color={C.ink} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Driver / charges alert banner ── */}
-        {newDriverAlert > 0 && (
-          <View style={styles.driverAlertBanner}>
-            <Ionicons name="car" size={15} color="#8b5cf6" />
-            <Text style={styles.driverAlertText}>
-              {newDriverAlert} new driver notification{newDriverAlert > 1 ? 's' : ''}
-            </Text>
-            <TouchableOpacity onPress={() => setActiveFilter('delivery')}>
-              <Text style={styles.driverAlertLink}>Driver</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setActiveFilter('charges')} style={{ marginLeft: 8 }}>
-              <Text style={[styles.driverAlertLink, { color: '#10b981' }]}>Charges</Text>
-            </TouchableOpacity>
+        {/* ══════════════════════════════════════════════════════════
+            ROW 1 — DRIVER PILLS
+            Only shown when there are drivers in notifications.
+           ══════════════════════════════════════════════════════════ */}
+        {driverNames.length > 0 && (
+          <View style={styles.driverSection}>
+            <View style={styles.driverSectionLabel}>
+              <View style={styles.driverSectionLabelDot} />
+              <Text style={styles.driverSectionLabelTxt}>Filter by Driver</Text>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.driverPillRow}>
+              {/* All Drivers pill */}
+              {(() => {
+                const active = !selectedDriver;
+                return (
+                  <TouchableOpacity
+                    style={[styles.driverPill, active && styles.driverPillActive]}
+                    onPress={() => { setSelectedDriver(null); setActiveCategory('all'); }}
+                  >
+                    <View style={[styles.driverPillAva, active && { backgroundColor: C.driver }]}>
+                      <Ionicons name="apps" size={12} color={active ? '#fff' : C.muted} />
+                    </View>
+                    <Text style={[styles.driverPillName, active && styles.driverPillNameActive]}>All</Text>
+                    <View style={[styles.driverPillBadge, active && styles.driverPillBadgeActive]}>
+                      <Text style={[styles.driverPillBadgeTxt, active && { color: C.driver }]}>{notifications.length}</Text>
+                    </View>
+                    {totalUnread > 0 && !active && (
+                      <View style={styles.driverUnreadDot}><Text style={styles.driverUnreadDotTxt}>{totalUnread}</Text></View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })()}
+
+              {driverNames.map(name => {
+                const active  = selectedDriver === name;
+                const total   = driverTotal(name);
+                const unread  = driverUnread(name);
+                return (
+                  <TouchableOpacity
+                    key={name}
+                    style={[styles.driverPill, active && styles.driverPillActive]}
+                    onPress={() => { setSelectedDriver(active ? null : name); setActiveCategory('all'); }}
+                  >
+                    <View style={[styles.driverPillAva, active && { backgroundColor: C.driver }]}>
+                      <Text style={[styles.driverPillInitial, active && { color: '#fff' }]}>
+                        {name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={[styles.driverPillName, active && styles.driverPillNameActive]} numberOfLines={1}>
+                      {name}
+                    </Text>
+                    <View style={[styles.driverPillBadge, active && styles.driverPillBadgeActive]}>
+                      <Text style={[styles.driverPillBadgeTxt, active && { color: C.driver }]}>{total}</Text>
+                    </View>
+                    {unread > 0 && (
+                      <View style={styles.driverUnreadDot}><Text style={styles.driverUnreadDotTxt}>{unread}</Text></View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Active driver context strip */}
+            {selectedDriver && (
+              <View style={styles.driverCtxBar}>
+                <View style={styles.driverCtxAva}>
+                  <Text style={styles.driverCtxInitial}>{selectedDriver.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.driverCtxName}>{selectedDriver}</Text>
+                  <Text style={styles.driverCtxSub}>
+                    {scopedPool.length} notification{scopedPool.length !== 1 ? 's' : ''}
+                    {scopedPool.filter(n => !n.read).length > 0
+                      ? ` · ${scopedPool.filter(n => !n.read).length} unread`
+                      : ' · all read'}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.driverCtxClose} onPress={() => { setSelectedDriver(null); setActiveCategory('all'); }}>
+                  <Ionicons name="close" size={13} color="rgba(255,255,255,0.8)" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
-        {/* ── Category filter tabs (row 1) ── */}
+        {/* ══════════════════════════════════════════════════════════
+            ROW 2 — CATEGORY TABS
+            Counts reflect the currently scoped driver pool.
+           ══════════════════════════════════════════════════════════ */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={styles.filterRow}
+          style={styles.catScroll}
+          contentContainerStyle={styles.catRow}
         >
           {NOTIF_FILTERS.map(f => {
-            const count = f.key === 'all'
-              ? notifications.length
-              : f.key === 'unread'
-              ? notifications.filter(n => !n.read).length
-              : notifications.filter(n => getNotifFilter(n.type) === f.key).length;
-            const active = activeFilter === f.key;
+            const count  = getCatCount(f.key);
+            const active = activeCategory === f.key;
             return (
               <TouchableOpacity
                 key={f.key}
-                style={[styles.filterTab, active && styles.filterTabActive]}
-                onPress={() => setActiveFilter(f.key)}
+                style={[styles.catTab, active && { backgroundColor: f.accent, borderColor: f.accent }]}
+                onPress={() => setActiveCategory(f.key)}
               >
-                <Ionicons name={f.icon} size={13} color={active ? '#fff' : '#6b7280'} />
-                <Text style={[styles.filterTabTxt, active && styles.filterTabTxtActive]}>{f.label}</Text>
+                <Ionicons name={f.icon} size={13} color={active ? '#fff' : C.muted} />
+                <Text style={[styles.catTabTxt, active && { color: '#fff' }]}>{f.label}</Text>
                 {count > 0 && (
-                  <View style={[styles.filterBadge, active && styles.filterBadgeActive]}>
-                    <Text style={[styles.filterBadgeTxt, active && styles.filterBadgeTxtActive]}>{count}</Text>
+                  <View style={[styles.catTabBadge, active && styles.catTabBadgeActive]}>
+                    <Text style={[styles.catTabBadgeTxt, active && { color: f.accent }]}>{count}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -358,115 +430,38 @@ const NotificationsModal = ({ visible, notifications, onClose, onMarkRead, onMar
           })}
         </ScrollView>
 
-        {/* ── Driver name pills (row 2) — only when there are drivers ── */}
-        {driverNames.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.driverPillScroll}
-            contentContainerStyle={styles.driverPillRow}
-          >
-            {driverNames.map(name => {
-              const key       = `driver:${name}`;
-              const active    = activeFilter === key;
-              const total     = notifications.filter(n => n.driver_name === name).length;
-              const unread    = notifications.filter(n => n.driver_name === name && !n.read).length;
-              return (
-                <TouchableOpacity
-                  key={key}
-                  style={[styles.driverPill, active && styles.driverPillActive]}
-                  onPress={() => setActiveFilter(active ? 'all' : key)}
-                >
-                  <View style={[styles.driverPillAvatar, active && styles.driverPillAvatarActive]}>
-                    <Text style={[styles.driverPillInitial, active && { color: '#fff' }]}>
-                      {name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={[styles.driverPillName, active && styles.driverPillNameActive]} numberOfLines={1}>
-                    {name}
-                  </Text>
-                  <View style={[styles.driverPillCount, active && styles.driverPillCountActive]}>
-                    <Text style={[styles.driverPillCountTxt, active && { color: '#fff' }]}>{total}</Text>
-                  </View>
-                  {unread > 0 && (
-                    <View style={styles.driverPillUnread}>
-                      <Text style={styles.driverPillUnreadTxt}>{unread}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
+        <View style={styles.notifDivider} />
 
-        {/* ── Active driver name header (when a driver pill is selected) ── */}
-        {activeDriverName && (
-          <View style={styles.driverActiveHeader}>
-            <View style={styles.driverActiveAvatar}>
-              <Ionicons name="person" size={16} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.driverActiveName}>{activeDriverName}</Text>
-              <Text style={styles.driverActiveCount}>
-                {filtered.length} notification{filtered.length !== 1 ? 's' : ''}
-                {filtered.filter(n => !n.read).length > 0
-                  ? ` · ${filtered.filter(n => !n.read).length} unread`
-                  : ' · all read'}
+        {/* ── NOTIFICATION LIST ── */}
+        <FlatList
+          data={visibleNotifs}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <NotificationItem
+              notification={item}
+              onMarkRead={onMarkRead}
+              onRemove={onRemove}
+              setActionModalConfig={setActionModalConfig}
+              onNavigateToBooking={onNavigateToBooking}
+            />
+          )}
+          contentContainerStyle={styles.notificationsList}
+          showsVerticalScrollIndicator={false}
+          style={{ flex: 1 }}
+          ListEmptyComponent={
+            <View style={styles.emptyNotifications}>
+              <View style={styles.emptyNotifIcon}>
+                <Ionicons name="notifications-off-outline" size={34} color={C.subtle} />
+              </View>
+              <Text style={styles.emptyNotificationsText}>No notifications</Text>
+              <Text style={styles.emptyNotificationsSubtext}>
+                {selectedDriver
+                  ? `No ${activeCategory === 'all' ? '' : activeCategory + ' '}notifications for ${selectedDriver}`
+                  : activeCategory === 'all' ? "You're all caught up!" : `No ${activeCategory} notifications`}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.driverActiveClear}
-              onPress={() => setActiveFilter('all')}
-            >
-              <Ionicons name="close" size={16} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── Notification list ── */}
-        {deliveryGrouped ? (
-          /* Delivery category → group by driver name */
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={styles.notificationsList}>
-            {Object.keys(deliveryGrouped).length === 0 ? (
-              <View style={styles.emptyNotifications}>
-                <Ionicons name="car-outline" size={48} color="#d1d5db" />
-                <Text style={styles.emptyNotificationsText}>No driver updates</Text>
-              </View>
-            ) : Object.entries(deliveryGrouped).map(([dName, items]) => (
-              <View key={dName} style={{ marginBottom: 16 }}>
-                <TouchableOpacity
-                  style={styles.driverGroupHeader}
-                  onPress={() => setActiveFilter(`driver:${dName}`)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.driverGroupIcon}>
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
-                      {dName.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={styles.driverGroupName}>{dName}</Text>
-                  <View style={styles.driverGroupBadge}>
-                    <Text style={styles.driverGroupBadgeTxt}>{items.length} notification{items.length > 1 ? 's' : ''}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={14} color="#9ca3af" style={{ marginLeft: 4 }} />
-                </TouchableOpacity>
-                {items.map(item => (
-                  <NotificationItem
-                    key={item.id}
-                    notification={item}
-                    onMarkRead={onMarkRead}
-                    onRemove={onRemove}
-                    setActionModalConfig={setActionModalConfig}
-                    onNavigateToBooking={onNavigateToBooking}
-                  />
-                ))}
-              </View>
-            ))}
-          </ScrollView>
-        ) : (
-          /* All other filters → flat list */
-          renderList(filtered)
-        )}
+          }
+        />
 
       </SafeAreaView>
     </Modal>
@@ -479,7 +474,7 @@ const NotificationsModal = ({ visible, notifications, onClose, onMarkRead, onMar
 const WebsiteContentModal = ({ visible, onClose, section, onSave, setActionModalConfig, setFeedbackModal }) => {
   const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving,  setSaving]  = useState(false);
 
   useEffect(() => { if (visible && section) fetchContent(); }, [visible, section]);
 
@@ -516,10 +511,10 @@ const WebsiteContentModal = ({ visible, onClose, section, onSave, setActionModal
     }, 300);
   };
 
-  const updateField = (field, value) => setContent(prev => ({ ...prev, content: { ...prev.content, [field]: value } }));
+  const updateField     = (field, value) => setContent(prev => ({ ...prev, content: { ...prev.content, [field]: value } }));
   const updateArrayItem = (arr, i, field, value) => setContent(prev => { const a = [...(prev.content[arr] || [])]; if (a[i]) a[i] = { ...a[i], [field]: value }; return { ...prev, content: { ...prev.content, [arr]: a } }; });
-  const addArrayItem = (arr, tmpl) => setContent(prev => ({ ...prev, content: { ...prev.content, [arr]: [...(prev.content[arr] || []), tmpl] } }));
-  const removeArrayItem = (arr, i) => setContent(prev => ({ ...prev, content: { ...prev.content, [arr]: (prev.content[arr] || []).filter((_, idx) => idx !== i) } }));
+  const addArrayItem    = (arr, tmpl) => setContent(prev => ({ ...prev, content: { ...prev.content, [arr]: [...(prev.content[arr] || []), tmpl] } }));
+  const removeArrayItem = (arr, i)    => setContent(prev => ({ ...prev, content: { ...prev.content, [arr]: (prev.content[arr] || []).filter((_, idx) => idx !== i) } }));
 
   if (!visible) return null;
   const sectionLabel = section === 'about_us' ? 'About Us' : section === 'how_it_works' ? 'How It Works' : 'FAQs';
@@ -529,32 +524,32 @@ const WebsiteContentModal = ({ visible, onClose, section, onSave, setActionModal
       <SafeAreaView style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Edit {sectionLabel}</Text>
-          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#222" /></TouchableOpacity>
+          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={C.ink} /></TouchableOpacity>
         </View>
         <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
           {loading ? <View style={styles.loadingContainer}><Text>Loading...</Text></View> : content?.content ? (
             <>
               <Text style={styles.label}>Title</Text>
-              <TextInput style={styles.input} value={content.content.title || ''} onChangeText={t => updateField('title', t)} placeholder="Title" placeholderTextColor="#9ca3af" />
+              <TextInput style={styles.input} value={content.content.title || ''} onChangeText={t => updateField('title', t)} placeholder="Title" placeholderTextColor={C.subtle} />
               {section === 'about_us' && (
                 <><Text style={styles.label}>Description</Text>
-                <TextInput style={[styles.input, styles.textArea]} value={content.content.description || ''} onChangeText={t => updateField('description', t)} multiline numberOfLines={6} placeholderTextColor="#9ca3af" /></>
+                <TextInput style={[styles.input, styles.textArea]} value={content.content.description || ''} onChangeText={t => updateField('description', t)} multiline numberOfLines={6} placeholderTextColor={C.subtle} /></>
               )}
               {section === 'faqs' && (Array.isArray(content.content.questions) ? content.content.questions : []).map((item, i) => (
                 <View key={i} style={styles.arrayItemContainer}>
                   <View style={styles.arrayItemHeader}>
                     <Text style={styles.arrayItemTitle}>FAQ {i + 1}</Text>
-                    <TouchableOpacity onPress={() => removeArrayItem('questions', i)}><Ionicons name="trash" size={22} color="#ef4444" /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => removeArrayItem('questions', i)}><Ionicons name="trash" size={22} color={C.cancelled} /></TouchableOpacity>
                   </View>
                   <Text style={styles.label}>Question</Text>
-                  <TextInput style={styles.input} value={item.question || ''} onChangeText={t => updateArrayItem('questions', i, 'question', t)} placeholderTextColor="#9ca3af" />
+                  <TextInput style={styles.input} value={item.question || ''} onChangeText={t => updateArrayItem('questions', i, 'question', t)} placeholderTextColor={C.subtle} />
                   <Text style={styles.label}>Answer</Text>
-                  <TextInput style={[styles.input, styles.textArea]} value={item.answer || ''} onChangeText={t => updateArrayItem('questions', i, 'answer', t)} multiline numberOfLines={4} placeholderTextColor="#9ca3af" />
+                  <TextInput style={[styles.input, styles.textArea]} value={item.answer || ''} onChangeText={t => updateArrayItem('questions', i, 'answer', t)} multiline numberOfLines={4} placeholderTextColor={C.subtle} />
                 </View>
               ))}
               {section === 'faqs' && (
                 <TouchableOpacity style={styles.addButton} onPress={() => addArrayItem('questions', { question: '', answer: '' })}>
-                  <Ionicons name="add-circle" size={28} color="#222" />
+                  <Ionicons name="add-circle" size={28} color={C.ink} />
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={handleSave} disabled={saving}>
@@ -619,7 +614,7 @@ const GalleryModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFe
           <Text style={styles.modalTitle}>Gallery Management</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             {!showUploadForm && <TouchableOpacity style={styles.uploadButton} onPress={pickImage} disabled={uploading}><Ionicons name="cloud-upload" size={20} color="#fff" /><Text style={styles.uploadButtonText}>Upload</Text></TouchableOpacity>}
-            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#222" /></TouchableOpacity>
+            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={C.ink} /></TouchableOpacity>
           </View>
         </View>
         <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
@@ -627,11 +622,11 @@ const GalleryModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFe
             <View style={styles.uploadFormContainer}>
               <Text style={styles.uploadFormTitle}>Upload Image Details</Text>
               <View style={styles.imagePreviewContainer}><Image source={{ uri: uploadData.preview }} style={styles.imagePreview} /></View>
-              <View style={styles.formGroup}><Text style={styles.formLabel}>Title (Optional)</Text><TextInput style={styles.formInput} value={uploadData.title} onChangeText={t => setUploadData({ ...uploadData, title: t })} placeholderTextColor="#9ca3af" /></View>
-              <View style={styles.formGroup}><Text style={styles.formLabel}>Description (Optional)</Text><TextInput style={[styles.formInput, styles.formTextArea]} value={uploadData.description} onChangeText={t => setUploadData({ ...uploadData, description: t })} multiline numberOfLines={3} placeholderTextColor="#9ca3af" /></View>
+              <View style={styles.formGroup}><Text style={styles.formLabel}>Title (Optional)</Text><TextInput style={styles.formInput} value={uploadData.title} onChangeText={t => setUploadData({ ...uploadData, title: t })} placeholderTextColor={C.subtle} /></View>
+              <View style={styles.formGroup}><Text style={styles.formLabel}>Description (Optional)</Text><TextInput style={[styles.formInput, styles.formTextArea]} value={uploadData.description} onChangeText={t => setUploadData({ ...uploadData, description: t })} multiline numberOfLines={3} placeholderTextColor={C.subtle} /></View>
               <View style={styles.uploadFormActions}>
                 <TouchableOpacity style={[styles.uploadFormButton, styles.confirmButton]} onPress={handleUpload} disabled={uploading}><Ionicons name="checkmark-circle" size={20} color="#fff" /><Text style={styles.uploadFormButtonText}>{uploading ? 'Uploading...' : 'Confirm Upload'}</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.uploadFormButton, styles.cancelUploadButton]} onPress={() => { setShowUploadForm(false); setUploadData({ image: null, preview: null, title: '', description: '', uploadedDate: new Date().toISOString().split('T')[0] }); }} disabled={uploading}><Ionicons name="close-circle" size={20} color="#ef4444" /><Text style={[styles.uploadFormButtonText, { color: '#ef4444' }]}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.uploadFormButton, styles.cancelUploadButton]} onPress={() => { setShowUploadForm(false); setUploadData({ image: null, preview: null, title: '', description: '', uploadedDate: new Date().toISOString().split('T')[0] }); }} disabled={uploading}><Ionicons name="close-circle" size={20} color={C.cancelled} /><Text style={[styles.uploadFormButtonText, { color: C.cancelled }]}>Cancel</Text></TouchableOpacity>
               </View>
             </View>
           ) : loading ? <View style={styles.loadingContainer}><Text>Loading images...</Text></View>
@@ -648,8 +643,8 @@ const GalleryModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFe
                   </View>
                   <View style={styles.galleryItemInfo}>
                     {img.title && <Text style={styles.galleryItemTitle} numberOfLines={1}>{img.title}</Text>}
-                    <View style={styles.galleryItemMeta}><Ionicons name="calendar-outline" size={12} color="#6b7280" /><Text style={styles.galleryItemDate}>{new Date(img.uploaded_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</Text></View>
-                    <View style={styles.galleryItemStatus}><View style={[styles.statusBadge, { backgroundColor: img.is_active ? '#222' : '#f3f4f6' }]}><Text style={[styles.statusBadgeText, { color: img.is_active ? '#fff' : '#6b7280' }]}>{img.is_active ? 'Visible' : 'Hidden'}</Text></View></View>
+                    <View style={styles.galleryItemMeta}><Ionicons name="calendar-outline" size={12} color={C.muted} /><Text style={styles.galleryItemDate}>{new Date(img.uploaded_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</Text></View>
+                    <View style={styles.galleryItemStatus}><View style={[styles.statusBadge, { backgroundColor: img.is_active ? C.ink : C.borderSoft }]}><Text style={[styles.statusBadgeText, { color: img.is_active ? '#fff' : C.muted }]}>{img.is_active ? 'Visible' : 'Hidden'}</Text></View></View>
                   </View>
                 </View>
               ))}
@@ -667,7 +662,7 @@ const GalleryModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFe
 const ContactModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFeedbackModal }) => {
   const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saving,  setSaving]  = useState(false);
 
   useEffect(() => { if (visible) fetchContent(); }, [visible]);
 
@@ -701,13 +696,13 @@ const ContactModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFe
       <SafeAreaView style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Edit Contact Information</Text>
-          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#222" /></TouchableOpacity>
+          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={C.ink} /></TouchableOpacity>
         </View>
         <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
           {loading ? <View style={styles.loadingContainer}><Text>Loading...</Text></View> : content?.content ? (
             <>
-              {[['title', 'Main Title'], ['subtitle', 'Subtitle'], ['address', 'Address'], ['mobile', 'Mobile Number'], ['availability', 'Availability'], ['email', 'Email']].map(([field, label]) => (
-                <View key={field}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={content.content[field] || ''} onChangeText={t => updateField(field, t)} placeholderTextColor="#9ca3af" /></View>
+              {[['title','Main Title'],['subtitle','Subtitle'],['address','Address'],['mobile','Mobile Number'],['availability','Availability'],['email','Email']].map(([field, label]) => (
+                <View key={field}><Text style={styles.label}>{label}</Text><TextInput style={styles.input} value={content.content[field] || ''} onChangeText={t => updateField(field, t)} placeholderTextColor={C.subtle} /></View>
               ))}
               <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={handleSave} disabled={saving}>
                 <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
@@ -726,8 +721,7 @@ const ContactModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFe
 const PaymentTrackerModal = ({ visible, onClose, bookings }) => {
   const allPayments = bookings
     .flatMap((b) => (b.payment_log || []).map((e) => ({
-      ...e, booking_id: b.id,
-      customer_name: b.customer_name,
+      ...e, booking_id: b.id, customer_name: b.customer_name,
       vehicle: `${b.vehicles?.make || ''} ${b.vehicles?.model || ''}`.trim(),
     })))
     .sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at));
@@ -739,7 +733,7 @@ const PaymentTrackerModal = ({ visible, onClose, bookings }) => {
       <SafeAreaView style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Payment Tracker</Text>
-          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#222" /></TouchableOpacity>
+          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={C.ink} /></TouchableOpacity>
         </View>
         <View style={styles.paymentTotalBanner}>
           <Text style={styles.paymentTotalLabel}>Total Collected via Driver</Text>
@@ -806,119 +800,60 @@ export default function DashboardScreen({ navigation }) {
         title:       data.title,
         message:     data.message,
         type:        data.type,
-        driver_name: data.driverName || null,   // store driver name so filter shows who's in charge
+        driver_name: data.driverName || null,
         read:        false,
         dismissed:   false,
       });
     } catch {}
   };
 
-  // ── Generate notifications — booking lifecycle + all driver charges ─────────
   const generateNotifications = async (bookings) => {
     if (!currentUserId) return;
     const today = new Date();
     for (const booking of bookings) {
-      const startDate  = new Date(booking.rental_start_date);
-      const daysDiff   = Math.ceil((startDate - today) / (1000 * 3600 * 24));
-      const existing   = await notificationsService.listByBookingId(booking.id);
-      const types      = new Set(existing?.map(n => n.type) || []);
-      const driver     = booking.assigned_driver || 'Driver';
-      const vehicle    = `${booking.vehicles?.year || ''} ${booking.vehicles?.make || ''} ${booking.vehicles?.model || ''}`.trim();
-      const customer   = booking.customer_name;
+      const startDate = new Date(booking.rental_start_date);
+      const daysDiff  = Math.ceil((startDate - today) / (1000 * 3600 * 24));
+      const existing  = await notificationsService.listByBookingId(booking.id);
+      const types     = new Set(existing?.map(n => n.type) || []);
+      const driver    = booking.assigned_driver || 'Driver';
+      const vehicle   = `${booking.vehicles?.year || ''} ${booking.vehicles?.make || ''} ${booking.vehicles?.model || ''}`.trim();
+      const customer  = booking.customer_name;
 
-      // ── Booking lifecycle ─────────────────────────────────────────────────
-      if (booking.status === 'pending' && !types.has('new_booking'))
-        await createNotification({ bookingId: booking.id, type: 'new_booking',
-          title: '📋 New Booking Request',
-          message: `${customer} requested ${vehicle}` });
-
+      if (booking.status === 'pending'   && !types.has('new_booking'))
+        await createNotification({ bookingId: booking.id, type: 'new_booking',       title: '📋 New Booking Request', message: `${customer} requested ${vehicle}` });
       if (booking.status === 'confirmed' && daysDiff === 0 && !types.has('pickup_today'))
-        await createNotification({ bookingId: booking.id, type: 'pickup_today',
-          title: '📅 Pickup Today',
-          message: `${customer} is picking up ${vehicle} today` });
-
-      // ✅ Booking completed — was missing, now fires correctly
+        await createNotification({ bookingId: booking.id, type: 'pickup_today',       title: '📅 Pickup Today',        message: `${customer} is picking up ${vehicle} today` });
       if (booking.status === 'completed' && !types.has('booking_completed'))
-        await createNotification({ bookingId: booking.id, type: 'booking_completed',
-          title: '✅ Booking Completed',
-          message: `${customer}'s booking for ${vehicle} is now complete. Total: ${formatCurrency(booking.total_price)}` });
-
+        await createNotification({ bookingId: booking.id, type: 'booking_completed', title: '✅ Booking Completed',    message: `${customer}'s booking for ${vehicle} is now complete. Total: ${formatCurrency(booking.total_price)}` });
       if (booking.status === 'cancelled' && !types.has('booking_cancelled'))
-        await createNotification({ bookingId: booking.id, type: 'booking_cancelled',
-          title: '❌ Booking Cancelled',
-          message: `${customer}'s booking for ${vehicle} was cancelled` });
+        await createNotification({ bookingId: booking.id, type: 'booking_cancelled', title: '❌ Booking Cancelled',    message: `${customer}'s booking for ${vehicle} was cancelled` });
+      if (booking.status === 'declined'  && !types.has('booking_declined'))
+        await createNotification({ bookingId: booking.id, type: 'booking_declined',  title: '🚫 Booking Declined',    message: `${customer}'s booking for ${vehicle} was declined` });
 
-      if (booking.status === 'declined' && !types.has('booking_declined'))
-        await createNotification({ bookingId: booking.id, type: 'booking_declined',
-          title: '🚫 Booking Declined',
-          message: `${customer}'s booking for ${vehicle} was declined` });
-
-      // ── Driver delivery updates (delivery bookings only) ──────────────────
       if (booking.delivery_option === 'deliver') {
-        if (booking.status === 'ongoing' && !types.has('driver_ongoing'))
-          await createNotification({ bookingId: booking.id, type: 'driver_ongoing',
-            driverName: driver,
-            title: '🚗 Driver En Route',
-            message: `[${driver}] is driving ${vehicle} to ${customer}` });
-
+        if (booking.status === 'ongoing'   && !types.has('driver_ongoing'))
+          await createNotification({ bookingId: booking.id, type: 'driver_ongoing',   driverName: driver, title: '🚗 Driver En Route',    message: `[${driver}] is driving ${vehicle} to ${customer}` });
         if (booking.status === 'delivered' && !types.has('driver_delivered'))
-          await createNotification({ bookingId: booking.id, type: 'driver_delivered',
-            driverName: driver,
-            title: '📦 Vehicle Delivered',
-            message: `[${driver}] delivered ${vehicle} to ${customer}` });
-
+          await createNotification({ bookingId: booking.id, type: 'driver_delivered', driverName: driver, title: '📦 Vehicle Delivered',   message: `[${driver}] delivered ${vehicle} to ${customer}` });
         if (booking.status === 'retrieved' && !types.has('driver_retrieved'))
-          await createNotification({ bookingId: booking.id, type: 'driver_retrieved',
-            driverName: driver,
-            title: '🔁 Vehicle Retrieved',
-            message: `[${driver}] retrieved ${vehicle} from ${customer}` });
+          await createNotification({ bookingId: booking.id, type: 'driver_retrieved', driverName: driver, title: '🔁 Vehicle Retrieved',   message: `[${driver}] retrieved ${vehicle} from ${customer}` });
 
-        // ── All driver charges ────────────────────────────────────────────
-        // Payment collected
         const payments = booking.payment_log || [];
         for (let i = 0; i < payments.length; i++) {
-          const payType = `driver_payment_${i}`;
-          if (!types.has(payType))
-            await createNotification({ bookingId: booking.id, type: 'driver_payment',
-              driverName: driver,
-              title: '💰 Payment Collected',
+          if (!types.has(`driver_payment_${i}`))
+            await createNotification({ bookingId: booking.id, type: 'driver_payment', driverName: driver, title: '💰 Payment Collected',
               message: `[${driver}] collected ${formatCurrency(payments[i].amount)} from ${customer}${payments[i].event ? ` — ${payments[i].event}` : ''}` });
         }
-
-        // Damage fee
-        if (booking.damage_fee > 0 && !types.has('driver_damage'))
-          await createNotification({ bookingId: booking.id, type: 'driver_damage',
-            driverName: driver,
-            title: '⚠️ Damage Fee',
-            message: `[${driver}] reported damage charge of ${formatCurrency(booking.damage_fee)} — ${customer}'s ${vehicle}` });
-
-        // Fuel charge
-        if (booking.fuel_charge > 0 && !types.has('driver_fuel'))
-          await createNotification({ bookingId: booking.id, type: 'driver_fuel',
-            driverName: driver,
-            title: '⛽ Fuel Charge',
-            message: `[${driver}] reported fuel charge of ${formatCurrency(booking.fuel_charge)} for ${customer}` });
-
-        // Delay charge
-        if (booking.delay_charge > 0 && !types.has('driver_delay'))
-          await createNotification({ bookingId: booking.id, type: 'driver_delay',
-            driverName: driver,
-            title: '⏱ Delay Charge',
-            message: `[${driver}] recorded delay charge of ${formatCurrency(booking.delay_charge)} for ${customer}` });
-
-        // Extra km charge
+        if (booking.damage_fee      > 0 && !types.has('driver_damage'))
+          await createNotification({ bookingId: booking.id, type: 'driver_damage',       driverName: driver, title: '⚠️ Damage Fee',         message: `[${driver}] reported damage charge of ${formatCurrency(booking.damage_fee)} — ${customer}'s ${vehicle}` });
+        if (booking.fuel_charge     > 0 && !types.has('driver_fuel'))
+          await createNotification({ bookingId: booking.id, type: 'driver_fuel',         driverName: driver, title: '⛽ Fuel Charge',         message: `[${driver}] reported fuel charge of ${formatCurrency(booking.fuel_charge)} for ${customer}` });
+        if (booking.delay_charge    > 0 && !types.has('driver_delay'))
+          await createNotification({ bookingId: booking.id, type: 'driver_delay',        driverName: driver, title: '⏱ Delay Charge',        message: `[${driver}] recorded delay charge of ${formatCurrency(booking.delay_charge)} for ${customer}` });
         if (booking.extra_km_charge > 0 && !types.has('driver_extra_km'))
-          await createNotification({ bookingId: booking.id, type: 'driver_extra_km',
-            driverName: driver,
-            title: '📍 Extra KM Charge',
-            message: `[${driver}] recorded extra km charge of ${formatCurrency(booking.extra_km_charge)} for ${customer}` });
-
-        // Extra hours charge
+          await createNotification({ bookingId: booking.id, type: 'driver_extra_km',     driverName: driver, title: '📍 Extra KM Charge',     message: `[${driver}] recorded extra km charge of ${formatCurrency(booking.extra_km_charge)} for ${customer}` });
         if (booking.extra_hours_charge > 0 && !types.has('driver_extra_hours'))
-          await createNotification({ bookingId: booking.id, type: 'driver_extra_hours',
-            driverName: driver,
-            title: '⏰ Extra Hours Charge',
-            message: `[${driver}] recorded extra hours charge of ${formatCurrency(booking.extra_hours_charge)} for ${customer}` });
+          await createNotification({ bookingId: booking.id, type: 'driver_extra_hours',  driverName: driver, title: '⏰ Extra Hours Charge',  message: `[${driver}] recorded extra hours charge of ${formatCurrency(booking.extra_hours_charge)} for ${customer}` });
       }
     }
     await fetchNotifications();
@@ -944,12 +879,9 @@ export default function DashboardScreen({ navigation }) {
       const startOfMon = new Date(today.getFullYear(), today.getMonth(), 1);
       const endOfMon   = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       const todayStr   = today.toISOString().split('T')[0];
-
       const [vehicles, bookings] = await Promise.all([vehiclesService.list(), bookingsService.listWithDetails()]);
       setAllBookings(bookings || []);
-
       const rentedIds = new Set(bookings?.filter(b => ['confirmed','pending'].includes(b.status) && new Date(b.rental_start_date) <= today && new Date(b.rental_end_date) >= today).map(b => b.vehicle_id) || []);
-
       setDashboardData({
         totalVehicles:     vehicles?.length || 0,
         availableVehicles: vehicles?.filter(v => !rentedIds.has(v.id)).length || 0,
@@ -982,7 +914,7 @@ export default function DashboardScreen({ navigation }) {
   const handleMarkAllRead          = async ()   => { try { setNotifications(p => p.map(n => ({ ...n, read: true }))); await notificationsService.markAllRead(); } catch {} };
   const handleClearAll             = ()         => setActionModalConfig({ title: 'Clear All', message: 'Clear all notifications?', onConfirm: async () => { try { setNotifications([]); await notificationsService.markAllDismissed(); setFeedbackModal({ visible: true, type: 'success', message: 'All notifications cleared!' }); } catch { setFeedbackModal({ visible: true, type: 'error', message: 'Failed to clear.' }); } } });
   const handleRemoveNotification   = async (id) => { try { setNotifications(p => p.filter(n => n.id !== id)); await notificationsService.update(id, { dismissed: true }); } catch {} };
-  const handleNavigateToBooking    = (id) => { setShowNotifications(false); navigation?.navigate?.('Bookings', { screen: 'BookingsList', params: { openBookingId: id, openInEditMode: true } }); };
+  const handleNavigateToBooking    = (id)       => { setShowNotifications(false); navigation?.navigate?.('Bookings', { screen: 'BookingsList', params: { openBookingId: id, openInEditMode: true } }); };
 
   const countByStatus = (st) => allBookings.filter(b => b.status === st).length;
 
@@ -996,29 +928,23 @@ export default function DashboardScreen({ navigation }) {
     </TouchableOpacity>
   );
 
-  // Status grid row — two chips side by side
   const StatusRow = ({ items }) => (
     <View style={styles.statusGrid}>
       {items.map(({ label, color, count }) => (
         <View key={label} style={styles.statusItem}>
           <View style={[styles.statusDot, { backgroundColor: color }]} />
-          <View>
-            <Text style={styles.statusValue}>{count}</Text>
-            <Text style={styles.statusLabel}>{label}</Text>
-          </View>
+          <View><Text style={styles.statusValue}>{count}</Text><Text style={styles.statusLabel}>{label}</Text></View>
         </View>
       ))}
     </View>
   );
 
   const deliveryBookings = allBookings.filter(b =>
-    b.delivery_option === 'deliver' &&
-    ['confirmed', 'ongoing', 'delivered', 'retrieved'].includes(b.status)
+    b.delivery_option === 'deliver' && ['confirmed','ongoing','delivered','retrieved'].includes(b.status)
   );
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Dashboard</Text>
@@ -1027,7 +953,7 @@ export default function DashboardScreen({ navigation }) {
         <View style={styles.headerActions}>
           <NotificationBell notifications={notifications} onPress={() => setShowNotifications(true)} />
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={28} color="#222" />
+            <Ionicons name="log-out-outline" size={28} color={C.ink} />
           </TouchableOpacity>
         </View>
       </View>
@@ -1038,15 +964,13 @@ export default function DashboardScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchDashboardData} />}
         contentContainerStyle={styles.scrollContainer}
       >
-        {/* Stat Cards — keep black icons as requested */}
         <View style={styles.statsContainer}>
-          <StatCard title="Total Vehicles"   value={dashboardData.totalVehicles}     icon="car"              color="#222" onPress={() => navigation?.navigate?.('Vehicles')} />
-          <StatCard title="Available"         value={dashboardData.availableVehicles} icon="checkmark-circle" color="#222" onPress={() => navigation?.navigate?.('Vehicles')} />
-          <StatCard title="Active Rentals"    value={dashboardData.activeBookings}    icon="time"             color="#222" onPress={() => navigation?.navigate?.('Bookings')} />
-          <StatCard title="Today's Bookings"  value={dashboardData.todayBookings}     icon="calendar"         color="#222" onPress={() => navigation?.navigate?.('Bookings')} />
+          <StatCard title="Total Vehicles"  value={dashboardData.totalVehicles}     icon="car"              color={C.ink} onPress={() => navigation?.navigate?.('Vehicles')} />
+          <StatCard title="Available"        value={dashboardData.availableVehicles} icon="checkmark-circle" color={C.ink} onPress={() => navigation?.navigate?.('Vehicles')} />
+          <StatCard title="Active Rentals"   value={dashboardData.activeBookings}    icon="time"             color={C.ink} onPress={() => navigation?.navigate?.('Bookings')} />
+          <StatCard title="Today's Bookings" value={dashboardData.todayBookings}     icon="calendar"         color={C.ink} onPress={() => navigation?.navigate?.('Bookings')} />
         </View>
 
-        {/* Revenue */}
         <View style={styles.revenueCard}>
           <View style={styles.revenueHeader}><Text style={styles.sectionTitle}>Monthly Revenue</Text></View>
           <View style={styles.revenueContent}>
@@ -1055,33 +979,19 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.revenueSubtext}>{new Date().toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}</Text>
             </View>
             <View style={styles.revenueIconContainer}>
-              <Ionicons name="trending-up" size={32} color="#4CAF50" />
+              <Ionicons name="trending-up" size={32} color={C.confirmed} />
             </View>
           </View>
         </View>
 
-        {/* ── Booking Status Overview — colours matching BookingScreen ── */}
         <View style={styles.statusOverviewCard}>
           <Text style={styles.sectionTitle}>Booking Status Overview</Text>
-          <StatusRow items={[
-            { label: 'Pending',   color: STATUS_COLOR.pending,   count: dashboardData.pendingBookings },
-            { label: 'Confirmed', color: STATUS_COLOR.confirmed, count: dashboardData.confirmedBookings },
-          ]} />
-          <StatusRow items={[
-            { label: 'Ongoing',   color: STATUS_COLOR.ongoing,   count: countByStatus('ongoing') },
-            { label: 'Delivered', color: STATUS_COLOR.delivered, count: countByStatus('delivered') },
-          ]} />
-          <StatusRow items={[
-            { label: 'Retrieved', color: STATUS_COLOR.retrieved, count: countByStatus('retrieved') },
-            { label: 'Completed', color: STATUS_COLOR.completed, count: dashboardData.completedBookings },
-          ]} />
-          <StatusRow items={[
-            { label: 'Cancelled', color: STATUS_COLOR.cancelled, count: dashboardData.cancelledBookings },
-            { label: 'Declined',  color: STATUS_COLOR.declined,  count: dashboardData.declinedBookings },
-          ]} />
+          <StatusRow items={[{ label: 'Pending', color: C.pending, count: dashboardData.pendingBookings }, { label: 'Confirmed', color: C.confirmed, count: dashboardData.confirmedBookings }]} />
+          <StatusRow items={[{ label: 'Ongoing', color: C.ongoing, count: countByStatus('ongoing') }, { label: 'Delivered', color: C.delivered, count: countByStatus('delivered') }]} />
+          <StatusRow items={[{ label: 'Retrieved', color: C.retrieved, count: countByStatus('retrieved') }, { label: 'Completed', color: C.completed, count: dashboardData.completedBookings }]} />
+          <StatusRow items={[{ label: 'Cancelled', color: C.cancelled, count: dashboardData.cancelledBookings }, { label: 'Declined', color: C.declined, count: dashboardData.declinedBookings }]} />
         </View>
 
-        {/* ── Driver Assignments — no assign button, just view all ── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View>
@@ -1095,51 +1005,34 @@ export default function DashboardScreen({ navigation }) {
               </TouchableOpacity>
               <TouchableOpacity onPress={() => navigation?.navigate?.('Bookings')} style={styles.viewAllBtn}>
                 <Text style={styles.viewAllBtnText}>View All</Text>
-                <Ionicons name="chevron-forward" size={14} color="#374151" />
+                <Ionicons name="chevron-forward" size={14} color={C.inkSoft} />
               </TouchableOpacity>
             </View>
           </View>
-
           {deliveryBookings.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="car-outline" size={40} color="#d1d5db" />
-              <Text style={styles.emptyStateText}>No active delivery bookings</Text>
-            </View>
-          ) : (
-            deliveryBookings.slice(0, 4).map(booking => (
-              <TouchableOpacity
-                key={booking.id}
-                style={styles.driverBookingItem}
-                onPress={() => navigation?.navigate?.('Bookings', { screen: 'BookingsList', params: { openBookingId: booking.id } })}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.bookingStatusBar, { backgroundColor: getStatusColor(booking.status) }]} />
-                <View style={styles.driverBookingInfo}>
-                  <Text style={styles.driverBookingCustomer}>{booking.customer_name}</Text>
-                  <Text style={styles.driverBookingVehicle}>{booking.vehicles?.year} {booking.vehicles?.make} {booking.vehicles?.model}</Text>
-                  <Text style={styles.driverBookingAddress} numberOfLines={1}>📍 {booking.delivery_address || booking.pickup_location || '—'}</Text>
-                  {booking.assigned_driver ? (
-                    <View style={styles.driverChip}>
-                      <Ionicons name="person" size={11} color="#065f46" />
-                      <Text style={styles.driverChipText}>{booking.assigned_driver}</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.noDriverChip}>
-                      <Ionicons name="person-outline" size={11} color="#92400e" />
-                      <Text style={styles.noDriverChipText}>No driver assigned</Text>
-                    </View>
-                  )}
+            <View style={styles.emptyState}><Ionicons name="car-outline" size={40} color="#d1d5db" /><Text style={styles.emptyStateText}>No active delivery bookings</Text></View>
+          ) : deliveryBookings.slice(0, 4).map(booking => (
+            <TouchableOpacity key={booking.id} style={styles.driverBookingItem}
+              onPress={() => navigation?.navigate?.('Bookings', { screen: 'BookingsList', params: { openBookingId: booking.id } })} activeOpacity={0.75}>
+              <View style={[styles.bookingStatusBar, { backgroundColor: getStatusColor(booking.status) }]} />
+              <View style={styles.driverBookingInfo}>
+                <Text style={styles.driverBookingCustomer}>{booking.customer_name}</Text>
+                <Text style={styles.driverBookingVehicle}>{booking.vehicles?.year} {booking.vehicles?.make} {booking.vehicles?.model}</Text>
+                <Text style={styles.driverBookingAddress} numberOfLines={1}>📍 {booking.delivery_address || booking.pickup_location || '—'}</Text>
+                {booking.assigned_driver ? (
+                  <View style={styles.driverChip}><Ionicons name="person" size={11} color="#065f46" /><Text style={styles.driverChipText}>{booking.assigned_driver}</Text></View>
+                ) : (
+                  <View style={styles.noDriverChip}><Ionicons name="person-outline" size={11} color="#92400e" /><Text style={styles.noDriverChipText}>No driver assigned</Text></View>
+                )}
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 6, justifyContent: 'center' }}>
+                <View style={[styles.statusMiniPill, { backgroundColor: getStatusColor(booking.status) + '20' }]}>
+                  <Text style={[styles.statusMiniText, { color: getStatusColor(booking.status) }]}>{booking.status}</Text>
                 </View>
-                <View style={{ alignItems: 'flex-end', gap: 6, justifyContent: 'center' }}>
-                  <View style={[styles.statusMiniPill, { backgroundColor: getStatusColor(booking.status) + '20' }]}>
-                    <Text style={[styles.statusMiniText, { color: getStatusColor(booking.status) }]}>{booking.status}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-
+                <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+              </View>
+            </TouchableOpacity>
+          ))}
           {deliveryBookings.length > 4 && (
             <TouchableOpacity style={styles.showMoreBtn} onPress={() => navigation?.navigate?.('Bookings')}>
               <Text style={styles.showMoreTxt}>+{deliveryBookings.length - 4} more bookings — View all</Text>
@@ -1147,7 +1040,6 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
-        {/* Recent Bookings */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Bookings</Text>
@@ -1158,10 +1050,10 @@ export default function DashboardScreen({ navigation }) {
               <View style={styles.bookingLeft}>
                 <View style={[styles.bookingStatusBar, { backgroundColor: getStatusColor(booking.status) }]} />
                 <View style={styles.bookingInfo}>
-                  <View style={styles.bookingNameRow}><Ionicons name="person" size={14} color="#6b7280" /><Text style={styles.bookingCustomer}>{booking.customer_name}</Text></View>
-                  {booking.vehicles && <View style={styles.bookingVehicleRow}><Ionicons name="car" size={12} color="#6b7280" /><Text style={styles.bookingVehicle}>{booking.vehicles.year} {booking.vehicles.make} {booking.vehicles.model}</Text></View>}
-                  {booking.vehicle_variants?.plate_number && <View style={styles.bookingPlateRow}><Ionicons name="card" size={12} color="#6b7280" /><Text style={styles.bookingVehicle}>{booking.vehicle_variants.plate_number}</Text></View>}
-                  <View style={styles.bookingDateRow}><Ionicons name="calendar-outline" size={12} color="#6b7280" /><Text style={styles.bookingDate}>{formatDate(booking.rental_start_date)} - {formatDate(booking.rental_end_date)}</Text></View>
+                  <View style={styles.bookingNameRow}><Ionicons name="person" size={14} color={C.muted} /><Text style={styles.bookingCustomer}>{booking.customer_name}</Text></View>
+                  {booking.vehicles && <View style={styles.bookingVehicleRow}><Ionicons name="car" size={12} color={C.muted} /><Text style={styles.bookingVehicle}>{booking.vehicles.year} {booking.vehicles.make} {booking.vehicles.model}</Text></View>}
+                  {booking.vehicle_variants?.plate_number && <View style={styles.bookingPlateRow}><Ionicons name="card" size={12} color={C.muted} /><Text style={styles.bookingVehicle}>{booking.vehicle_variants.plate_number}</Text></View>}
+                  <View style={styles.bookingDateRow}><Ionicons name="calendar-outline" size={12} color={C.muted} /><Text style={styles.bookingDate}>{formatDate(booking.rental_start_date)} - {formatDate(booking.rental_end_date)}</Text></View>
                 </View>
               </View>
               <View style={styles.bookingRight}>
@@ -1174,43 +1066,27 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
-        {/* ── Website Management — improved grid layout ── */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Website Management</Text>
-          </View>
-
-          {/* Top 2 — full-width cards with description */}
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Website Management</Text></View>
           {[
-            { icon: 'information-circle-outline', title: 'About Us', desc: 'Edit title, description & statistics', onPress: () => { setContentSection('about_us'); setShowContentModal(true); } },
-            { icon: 'list-outline', title: 'How It Works', desc: 'Manage rental process steps', onPress: () => { setContentSection('how_it_works'); setShowContentModal(true); } },
-            { icon: 'help-circle-outline', title: 'FAQs', desc: 'Update frequently asked questions', onPress: () => { setContentSection('faqs'); setShowContentModal(true); } },
+            { icon: 'information-circle-outline', title: 'About Us',     desc: 'Edit title, description & statistics', onPress: () => { setContentSection('about_us');    setShowContentModal(true); } },
+            { icon: 'list-outline',               title: 'How It Works', desc: 'Manage rental process steps',          onPress: () => { setContentSection('how_it_works'); setShowContentModal(true); } },
+            { icon: 'help-circle-outline',        title: 'FAQs',         desc: 'Update frequently asked questions',    onPress: () => { setContentSection('faqs');         setShowContentModal(true); } },
           ].map(item => (
             <TouchableOpacity key={item.title} style={styles.websiteCardFull} onPress={item.onPress} activeOpacity={0.75}>
-              <View style={styles.websiteCardIconBox}>
-                <Ionicons name={item.icon} size={22} color="#222" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.websiteCardTitle}>{item.title}</Text>
-                <Text style={styles.websiteCardDesc}>{item.desc}</Text>
-              </View>
+              <View style={styles.websiteCardIconBox}><Ionicons name={item.icon} size={22} color={C.ink} /></View>
+              <View style={{ flex: 1 }}><Text style={styles.websiteCardTitle}>{item.title}</Text><Text style={styles.websiteCardDesc}>{item.desc}</Text></View>
               <Ionicons name="chevron-forward" size={18} color="#d1d5db" />
             </TouchableOpacity>
           ))}
-
-          {/* Bottom 2 — side-by-side tiles */}
           <View style={styles.websiteTileRow}>
             <TouchableOpacity style={styles.websiteTile} onPress={() => setShowGalleryModal(true)} activeOpacity={0.75}>
-              <View style={[styles.websiteTileIcon, { backgroundColor: '#f0f9ff' }]}>
-                <Ionicons name="images-outline" size={26} color="#0ea5e9" />
-              </View>
+              <View style={[styles.websiteTileIcon, { backgroundColor: '#f0f9ff' }]}><Ionicons name="images-outline" size={26} color={C.booking} /></View>
               <Text style={styles.websiteTileTitle}>Gallery</Text>
               <Text style={styles.websiteTileDesc}>Upload & manage images</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.websiteTile} onPress={() => setContactModalVisible(true)} activeOpacity={0.75}>
-              <View style={[styles.websiteTileIcon, { backgroundColor: '#fdf4ff' }]}>
-                <Ionicons name="call-outline" size={26} color="#a855f7" />
-              </View>
+              <View style={[styles.websiteTileIcon, { backgroundColor: '#fdf4ff' }]}><Ionicons name="call-outline" size={26} color={C.driver} /></View>
               <Text style={styles.websiteTileTitle}>Contact Info</Text>
               <Text style={styles.websiteTileDesc}>Edit contact & social</Text>
             </TouchableOpacity>
@@ -1218,7 +1094,6 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Modals */}
       <NotificationsModal
         visible={showNotifications}
         notifications={notifications}
@@ -1251,200 +1126,189 @@ const styles = StyleSheet.create({
   header:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 8 },
   headerLeft:     { flex: 1 },
   headerTitle:    { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  headerSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 2 },
+  headerSubtitle: { fontSize: 14, color: C.muted, marginTop: 2 },
   headerActions:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
 
   // Bell
   notificationBell:      { position: 'relative', padding: 10, borderRadius: 8 },
-  notificationBadge:     { position: 'absolute', top: 4, right: 4, backgroundColor: '#f59e0b', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
+  notificationBadge:     { position: 'absolute', top: 4, right: 4, backgroundColor: C.unread, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
   notificationBadgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
-  logoutButton:          { padding: 8, borderRadius: 8, backgroundColor: '#f3f4f6' },
+  logoutButton:          { padding: 8, borderRadius: 8, backgroundColor: C.borderSoft },
 
-  // Modal shared
-  modalContainer:    { flex: 1, backgroundColor: 'white' },
-  modalHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  modalTitle:        { fontSize: 20, fontWeight: '700', color: '#111827' },
-  modalHeaderActions:{ flexDirection: 'row', alignItems: 'center', gap: 12 },
-  markAllReadButton: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f3f4f6', borderRadius: 6 },
-  markAllReadText:   { fontSize: 13, color: '#4b5563', fontWeight: '500' },
-  clearAllButton:    { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#fee2e2', borderRadius: 6 },
-  clearAllText:      { fontSize: 13, color: '#ef4444', fontWeight: '500' },
-  closeButton:       { padding: 4 },
-  modalContent:      { flex: 1, padding: 20 },
+  // ── Notification modal ─────────────────────────────────────────────────────
+  modalContainer: { flex: 1, backgroundColor: C.white, flexDirection: 'column' },
 
-  // Driver alert banner
-  driverAlertBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#faf5ff', borderRadius: 10, borderWidth: 1, borderColor: '#e9d5ff' },
-  driverAlertText:   { flex: 1, fontSize: 13, color: '#6b21a8', fontWeight: '500' },
-  driverAlertLink:   { fontSize: 13, fontWeight: '700', color: '#8b5cf6' },
+  // Header
+  notifHeader:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border },
+  notifHeaderTitle:   { fontSize: 20, fontWeight: '800', color: C.ink },
+  notifHeaderSub:     { fontSize: 12, color: C.subtle, marginTop: 2 },
+  notifHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  notifHeaderBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 6, backgroundColor: C.surface, borderRadius: 8, borderWidth: 1, borderColor: C.border },
+  notifHeaderBtnTxt:  { fontSize: 12, fontWeight: '600', color: C.inkSoft },
+  notifCloseBtn:      { width: 30, height: 30, borderRadius: 15, backgroundColor: C.borderSoft, justifyContent: 'center', alignItems: 'center', marginLeft: 2 },
 
-  // Driver name pill row (row 2 under category tabs)
-  driverPillScroll:       { maxHeight: 48, marginTop: 6 },
-  driverPillRow:          { flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
-  driverPill:             { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', maxWidth: 160 },
-  driverPillActive:       { backgroundColor: '#374151', borderColor: '#374151' },
-  driverPillAvatar:       { width: 22, height: 22, borderRadius: 11, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' },
-  driverPillAvatarActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  driverPillInitial:      { fontSize: 11, fontWeight: '800', color: '#374151' },
-  driverPillName:         { fontSize: 12, fontWeight: '600', color: '#374151', flex: 1 },
-  driverPillNameActive:   { color: '#fff' },
-  driverPillCount:        { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
-  driverPillCountActive:  { backgroundColor: 'rgba(255,255,255,0.2)' },
-  driverPillCountTxt:     { fontSize: 10, fontWeight: '700', color: '#374151' },
-  driverPillUnread:       { width: 8, height: 8, borderRadius: 4, backgroundColor: '#f59e0b', position: 'absolute', top: -2, right: -2 },
-  driverPillUnreadTxt:    { display: 'none' },
+  // ── ROW 1: Driver section ──────────────────────────────────────────────────
+  driverSection:       { paddingTop: 12, paddingBottom: 0, backgroundColor: '#fafbff', borderBottomWidth: 1, borderBottomColor: C.border },
+  driverSectionLabel:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, marginBottom: 9 },
+  driverSectionLabelDot:{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.driver },
+  driverSectionLabelTxt:{ fontSize: 11, fontWeight: '700', color: C.driver, textTransform: 'uppercase', letterSpacing: 0.6 },
 
-  // Active driver header bar (shown when a driver pill is selected)
-  driverActiveHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 8, marginBottom: 4, padding: 12, backgroundColor: '#374151', borderRadius: 12 },
-  driverActiveAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
-  driverActiveName:   { fontSize: 14, fontWeight: '800', color: '#fff' },
-  driverActiveCount:  { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 },
-  driverActiveClear:  { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  driverPillRow:      { flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 11 },
+  driverPill:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 22, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.border, maxWidth: 160, position: 'relative' },
+  driverPillActive:   { backgroundColor: C.driver + '10', borderColor: C.driver },
+  driverPillAva:      { width: 24, height: 24, borderRadius: 12, backgroundColor: C.borderSoft, justifyContent: 'center', alignItems: 'center' },
+  driverPillInitial:  { fontSize: 11, fontWeight: '800', color: C.inkSoft },
+  driverPillName:     { fontSize: 12, fontWeight: '600', color: C.inkSoft, flex: 1 },
+  driverPillNameActive:{ color: C.driver, fontWeight: '700' },
+  driverPillBadge:    { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: C.borderSoft, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
+  driverPillBadgeActive:{ backgroundColor: C.driver + '18' },
+  driverPillBadgeTxt: { fontSize: 10, fontWeight: '700', color: C.inkSoft },
+  driverUnreadDot:    { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.unread, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: C.white },
+  driverUnreadDotTxt: { fontSize: 9, fontWeight: '800', color: '#fff' },
 
-  // Filter tabs
-  filterScroll:      { maxHeight: 46, marginTop: 10 },
-  filterRow:         { flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
-  filterTab:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
-  filterTabActive:   { backgroundColor: '#222', borderColor: '#222' },
-  filterTabTxt:      { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  filterTabTxtActive:{ color: '#fff' },
-  filterBadge:       { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
-  filterBadgeActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  filterBadgeTxt:    { fontSize: 10, fontWeight: '700', color: '#374151' },
-  filterBadgeTxtActive:{ color: '#fff' },
+  // Active driver context bar
+  driverCtxBar:    { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 14, marginBottom: 11, padding: 10, backgroundColor: C.driver, borderRadius: 11 },
+  driverCtxAva:    { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  driverCtxInitial:{ fontSize: 13, fontWeight: '800', color: '#fff' },
+  driverCtxName:   { fontSize: 13, fontWeight: '800', color: '#fff' },
+  driverCtxSub:    { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 1 },
+  driverCtxClose:  { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
 
-  // Notifications list
-  notificationsList:         { paddingHorizontal: 16, paddingVertical: 12 },
-  notificationWrapper:       { marginBottom: 10 },
-  notificationItem:          { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14, paddingHorizontal: 14, backgroundColor: '#f9fafb', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', position: 'relative' },
-  unreadNotification:        { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
-  notificationItemActive:    { borderColor: '#3b82f6', backgroundColor: '#eff6ff' },
-  deliveryNotification:      { borderLeftWidth: 3, borderLeftColor: '#8b5cf6' },
-  notificationIconContainer: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  notificationContent:       { flex: 1 },
-  deliveryBadgeRow:          { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  deliveryBadge:             { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', backgroundColor: '#faf5ff', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
-  deliveryBadgeTxt:          { fontSize: 10, fontWeight: '700', color: '#8b5cf6' },
-  driverNameBadge:           { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#d1fae5', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
-  driverNameBadgeTxt:        { fontSize: 10, fontWeight: '700', color: '#065f46' },
-  // Driver group header — shown in Delivery filter, groups by who's in charge
-  driverGroupHeader:         { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  driverGroupIcon:           { width: 26, height: 26, borderRadius: 13, backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' },
-  driverGroupName:           { fontSize: 14, fontWeight: '800', color: '#111827', flex: 1 },
-  driverGroupBadge:          { backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  driverGroupBadgeTxt:       { fontSize: 11, fontWeight: '600', color: '#6b7280' },
-  notificationTitle:         { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 3 },
-  notificationMessage:       { fontSize: 13, color: '#6b7280', marginBottom: 6, lineHeight: 18 },
-  notificationTime:          { fontSize: 11, color: '#9ca3af', fontWeight: '500' },
-  unreadDot:                 { width: 8, height: 8, borderRadius: 4, backgroundColor: '#f59e0b', position: 'absolute', top: 14, right: 14 },
-  notificationMenuButton:    { padding: 8, borderRadius: 6 },
-  notificationActions:       { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f8fafc', borderRadius: 8, marginTop: 4, gap: 8 },
-  notificationActionButton:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, gap: 5 },
-  markReadButton:            { backgroundColor: '#dcfce7' },
-  viewBookingButton:         { backgroundColor: '#eff6ff' },
-  removeButton:              { backgroundColor: '#fee2e2' },
-  cancelButton:              { backgroundColor: '#f3f4f6' },
-  notificationActionText:    { fontSize: 12, fontWeight: '500' },
+  // ── ROW 2: Category tabs ───────────────────────────────────────────────────
+  catScroll: { maxHeight: 62, backgroundColor: C.white },
+  catRow:    { flexDirection: 'row', paddingHorizontal: 16, gap: 7, paddingTop: 8, paddingBottom: 12 },
+  catTab:    { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border },
+  catTabTxt: { fontSize: 12, fontWeight: '600', color: C.muted },
+  catTabBadge:      { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: C.border, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
+  catTabBadgeActive:{ backgroundColor: 'rgba(255,255,255,0.9)' },
+  catTabBadgeTxt:   { fontSize: 10, fontWeight: '700', color: C.inkSoft },
+
+  notifDivider: { height: 1, backgroundColor: C.border },
+
+  // ── Notification items ─────────────────────────────────────────────────────
+  notificationsList:     { paddingHorizontal: 14, paddingVertical: 12 },
+  notificationWrapper:   { marginBottom: 9 },
+  notificationItem:      { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 13, paddingHorizontal: 12, backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.border, position: 'relative' },
+  unreadNotification:    { backgroundColor: '#fffbeb', borderColor: '#fde68a' },
+  notificationItemActive:{ borderColor: C.ongoing, backgroundColor: '#eff6ff' },
+  notifIconWrap:         { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', marginRight: 11 },
+  notificationContent:   { flex: 1 },
+  notifBadgeRow:         { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  catBadge:              { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 7, borderWidth: 1 },
+  catBadgeTxt:           { fontSize: 10, fontWeight: '700' },
+  notificationTitle:     { fontSize: 13.5, fontWeight: '700', color: C.ink, marginBottom: 3 },
+  notificationMessage:   { fontSize: 12.5, color: C.muted, marginBottom: 5, lineHeight: 18 },
+  notificationTime:      { fontSize: 11, color: C.subtle, fontWeight: '500' },
+  unreadDot:             { width: 8, height: 8, borderRadius: 4, backgroundColor: C.unread, position: 'absolute', top: 14, right: 38 },
+  notificationMenuButton:{ padding: 8, borderRadius: 6 },
+  notificationActions:   { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', paddingHorizontal: 10, paddingVertical: 8, backgroundColor: C.surface, borderRadius: 8, marginTop: 4, gap: 7 },
+  notifActionBtn:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 7, gap: 5 },
+  notifActionTxt:        { fontSize: 12, fontWeight: '600' },
+
   emptyNotifications:        { alignItems: 'center', paddingVertical: 60 },
-  emptyNotificationsText:    { fontSize: 16, fontWeight: '500', color: '#6b7280', marginTop: 12 },
-  emptyNotificationsSubtext: { fontSize: 14, color: '#9ca3af', marginTop: 4 },
+  emptyNotifIcon:            { width: 68, height: 68, borderRadius: 34, backgroundColor: C.surface, justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 1, borderColor: C.border },
+  emptyNotificationsText:    { fontSize: 16, fontWeight: '700', color: C.inkSoft, marginBottom: 4 },
+  emptyNotificationsSubtext: { fontSize: 13, color: C.subtle, textAlign: 'center', paddingHorizontal: 24 },
+
+  // Generic modal shared (non-notification modals)
+  modalHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.border },
+  modalTitle:     { fontSize: 20, fontWeight: '700', color: C.ink },
+  modalContent:   { flex: 1, padding: 20 },
 
   // Form
-  label:              { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 12 },
-  input:              { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: 'white', color: '#111827' },
+  label:              { fontSize: 14, fontWeight: '600', color: C.inkSoft, marginBottom: 8, marginTop: 12 },
+  input:              { borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: C.white, color: C.ink },
   textArea:           { minHeight: 100, textAlignVertical: 'top' },
   addButton:          { padding: 4 },
-  arrayItemContainer: { backgroundColor: '#f9fafb', borderRadius: 8, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  arrayItemContainer: { backgroundColor: C.surface, borderRadius: 8, padding: 12, marginTop: 12, borderWidth: 1, borderColor: C.border },
   arrayItemHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  arrayItemTitle:     { fontSize: 14, fontWeight: '600', color: '#374151' },
-  saveButton:         { backgroundColor: '#222', borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginTop: 24, marginBottom: 40 },
-  saveButtonDisabled: { backgroundColor: '#9ca3af', opacity: 0.6 },
+  arrayItemTitle:     { fontSize: 14, fontWeight: '600', color: C.inkSoft },
+  saveButton:         { backgroundColor: C.ink, borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginTop: 24, marginBottom: 40 },
+  saveButtonDisabled: { backgroundColor: C.subtle, opacity: 0.6 },
   saveButtonText:     { color: 'white', fontSize: 16, fontWeight: '600' },
   loadingContainer:   { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  hint:               { fontSize: 13, color: '#6b7280', marginBottom: 24 },
 
   // Gallery
-  uploadButton:          { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#222', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  uploadButton:          { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.ink, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   uploadButtonText:      { color: 'white', fontSize: 14, fontWeight: '500' },
   emptyGallery:          { alignItems: 'center', paddingVertical: 60 },
-  emptyGalleryText:      { fontSize: 16, fontWeight: '500', color: '#6b7280', marginTop: 12 },
+  emptyGalleryText:      { fontSize: 16, fontWeight: '500', color: C.muted, marginTop: 12 },
   galleryGrid:           { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingBottom: 20 },
-  galleryItem:           { width: (width - 64) / 2, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', overflow: 'hidden' },
+  galleryItem:           { width: (width - 64) / 2, backgroundColor: C.white, borderRadius: 8, borderWidth: 1, borderColor: C.border, overflow: 'hidden' },
   galleryImage:          { width: '100%', height: 120, resizeMode: 'cover' },
   galleryItemActions:    { position: 'absolute', top: 8, right: 8, flexDirection: 'row', gap: 6 },
   galleryActionBtn:      { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  activeBtn:             { backgroundColor: '#222' },
+  activeBtn:             { backgroundColor: C.ink },
   deleteBtn:             { backgroundColor: 'rgba(239,68,68,0.8)' },
   galleryItemInfo:       { padding: 8 },
-  galleryItemTitle:      { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 4 },
+  galleryItemTitle:      { fontSize: 14, fontWeight: '600', color: C.ink, marginBottom: 4 },
   galleryItemMeta:       { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  galleryItemDate:       { fontSize: 11, color: '#6b7280' },
+  galleryItemDate:       { fontSize: 11, color: C.muted },
   galleryItemStatus:     { marginTop: 6 },
   statusBadge:           { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' },
   statusBadgeText:       { fontSize: 10, fontWeight: '600' },
-  uploadFormContainer:   { backgroundColor: '#f9fafb', borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#e5e7eb' },
-  uploadFormTitle:       { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 16 },
+  uploadFormContainer:   { backgroundColor: C.surface, borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: C.border },
+  uploadFormTitle:       { fontSize: 18, fontWeight: '700', color: C.ink, marginBottom: 16 },
   imagePreviewContainer: { width: '100%', height: 200, borderRadius: 8, overflow: 'hidden', marginBottom: 16 },
   imagePreview:          { width: '100%', height: '100%', resizeMode: 'cover' },
   formGroup:             { marginBottom: 16 },
-  formLabel:             { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-  formInput:             { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: 'white', color: '#111827' },
+  formLabel:             { fontSize: 14, fontWeight: '600', color: C.inkSoft, marginBottom: 8 },
+  formInput:             { borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: C.white, color: C.ink },
   formTextArea:          { minHeight: 80, textAlignVertical: 'top' },
   uploadFormActions:     { flexDirection: 'column', gap: 10, marginTop: 8 },
   uploadFormButton:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, gap: 8 },
-  confirmButton:         { backgroundColor: '#222' },
-  cancelUploadButton:    { backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb' },
+  confirmButton:         { backgroundColor: C.ink },
+  cancelUploadButton:    { backgroundColor: C.white, borderWidth: 1, borderColor: C.border },
   uploadFormButtonText:  { fontSize: 14, fontWeight: '600', color: 'white' },
 
   // Dashboard layout
   scrollView:      { flex: 1 },
   scrollContainer: { paddingBottom: Platform.OS === 'ios' ? 100 : 80 },
 
-  // Stat cards — black icons preserved
+  // Stat cards
   statsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 },
-  statCard:       { backgroundColor: 'white', borderRadius: 16, padding: 16, width: '49%', marginBottom: 16, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3.84, elevation: 3, alignItems: 'center' },
+  statCard:       { backgroundColor: C.white, borderRadius: 16, padding: 16, width: '49%', marginBottom: 16, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3, alignItems: 'center' },
   statContent:    { alignItems: 'center' },
   statIcon:       { marginBottom: 8 },
   statValue:      { fontSize: 28, fontWeight: '800', marginBottom: 4 },
-  statTitle:      { color: '#374151', fontSize: 12, fontWeight: '500', textAlign: 'center' },
+  statTitle:      { color: C.inkSoft, fontSize: 12, fontWeight: '500', textAlign: 'center' },
 
   // Revenue
-  revenueCard:        { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3.84, elevation: 3 },
-  revenueHeader:      { marginBottom: 12 },
-  revenueContent:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  revenueValue:       { fontSize: 28, fontWeight: 'bold', color: '#4CAF50', marginBottom: 4 },
-  revenueSubtext:     { fontSize: 14, color: '#9ca3af', fontWeight: '500' },
-  revenueIconContainer:{ backgroundColor: '#4CAF5018', padding: 12, borderRadius: 12 },
+  revenueCard:         { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3 },
+  revenueHeader:       { marginBottom: 12 },
+  revenueContent:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  revenueValue:        { fontSize: 28, fontWeight: 'bold', color: C.confirmed, marginBottom: 4 },
+  revenueSubtext:      { fontSize: 14, color: C.subtle, fontWeight: '500' },
+  revenueIconContainer:{ backgroundColor: C.confirmed + '18', padding: 12, borderRadius: 12 },
 
-  // Status overview — all 8 statuses in correct booking-screen colours
-  statusOverviewCard: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3.84, elevation: 3 },
+  // Status overview
+  statusOverviewCard: { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3 },
   statusGrid:         { flexDirection: 'row', gap: 12, marginTop: 12 },
-  statusItem:         { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#f9fafb', borderRadius: 10, gap: 10, borderWidth: 1, borderColor: '#f3f4f6' },
+  statusItem:         { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: C.surface, borderRadius: 10, gap: 10, borderWidth: 1, borderColor: C.borderSoft },
   statusDot:          { width: 12, height: 12, borderRadius: 6 },
-  statusValue:        { fontSize: 20, fontWeight: '800', color: '#111827' },
-  statusLabel:        { fontSize: 11, color: '#6b7280', fontWeight: '500', marginTop: 1 },
+  statusValue:        { fontSize: 20, fontWeight: '800', color: C.ink },
+  statusLabel:        { fontSize: 11, color: C.muted, fontWeight: '500', marginTop: 1 },
 
   // Sections
-  section:        { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3.84, elevation: 3 },
+  section:        { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3 },
   sectionHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-  sectionTitle:   { fontWeight: '800', fontSize: 17, letterSpacing: -0.3, color: '#111827' },
-  sectionSubtitle:{ fontSize: 12, color: '#9ca3af', marginTop: 2 },
-  viewAllText:    { fontSize: 14, color: '#222', fontWeight: '600' },
+  sectionTitle:   { fontWeight: '800', fontSize: 17, letterSpacing: -0.3, color: C.ink },
+  sectionSubtitle:{ fontSize: 12, color: C.subtle, marginTop: 2 },
+  viewAllText:    { fontSize: 14, color: C.ink, fontWeight: '600' },
+  viewAllBtn:     { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: C.borderSoft, borderRadius: 8 },
+  viewAllBtnText: { fontSize: 12, color: C.inkSoft, fontWeight: '600' },
+  showMoreBtn:    { marginTop: 8, paddingVertical: 10, alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.border },
+  showMoreTxt:    { fontSize: 13, color: C.muted, fontWeight: '500' },
 
-  // View all / show more buttons
-  viewAllBtn:    { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#f3f4f6', borderRadius: 8 },
-  viewAllBtnText:{ fontSize: 12, color: '#374151', fontWeight: '600' },
-  showMoreBtn:   { marginTop: 8, paddingVertical: 10, alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb' },
-  showMoreTxt:   { fontSize: 13, color: '#6b7280', fontWeight: '500' },
-
-  // Driver Assignments — tap-to-navigate, no assign button
-  paymentTrackerBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#222', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  // Driver assignments
+  paymentTrackerBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.ink, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   paymentTrackerBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  driverBookingItem:     { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: '#f9fafb', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', gap: 10 },
+  driverBookingItem:     { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: C.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border, gap: 10 },
   bookingStatusBar:      { width: 4, alignSelf: 'stretch', borderRadius: 4 },
   driverBookingInfo:     { flex: 1 },
-  driverBookingCustomer: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  driverBookingVehicle:  { fontSize: 12, color: '#374151', marginTop: 2 },
-  driverBookingAddress:  { fontSize: 11, color: '#6b7280', marginTop: 2 },
+  driverBookingCustomer: { fontSize: 14, fontWeight: '700', color: C.ink },
+  driverBookingVehicle:  { fontSize: 12, color: C.inkSoft, marginTop: 2 },
+  driverBookingAddress:  { fontSize: 11, color: C.muted, marginTop: 2 },
   driverChip:            { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, backgroundColor: '#d1fae5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, alignSelf: 'flex-start' },
   driverChipText:        { fontSize: 11, fontWeight: '600', color: '#065f46' },
   noDriverChip:          { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, alignSelf: 'flex-start' },
@@ -1453,41 +1317,41 @@ const styles = StyleSheet.create({
   statusMiniText:        { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
 
   // Recent bookings
-  bookingItem:     { flexDirection: 'row', alignItems: 'stretch', marginBottom: 10, backgroundColor: '#f9fafb', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#e5e7eb', minHeight: 80 },
-  bookingLeft:     { flexDirection: 'row', alignItems: 'stretch', flex: 1, marginRight: 12, minWidth: 0 },
-  bookingInfo:     { flex: 1, justifyContent: 'center', minWidth: 0 },
-  bookingNameRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
-  bookingCustomer: { fontWeight: 'bold', fontSize: 15, color: '#111827' },
+  bookingItem:      { flexDirection: 'row', alignItems: 'stretch', marginBottom: 10, backgroundColor: C.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: C.border, minHeight: 80 },
+  bookingLeft:      { flexDirection: 'row', alignItems: 'stretch', flex: 1, marginRight: 12, minWidth: 0 },
+  bookingInfo:      { flex: 1, justifyContent: 'center', minWidth: 0 },
+  bookingNameRow:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
+  bookingCustomer:  { fontWeight: 'bold', fontSize: 15, color: C.ink },
   bookingVehicleRow:{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 },
-  bookingPlateRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 },
-  bookingVehicle:  { fontSize: 13, color: '#6b7280' },
-  bookingDateRow:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  bookingDate:     { fontSize: 11, color: '#9ca3af' },
-  bookingRight:    { alignItems: 'flex-end', justifyContent: 'center' },
-  bookingAmount:   { fontWeight: 'bold', fontSize: 15, color: '#111827', marginBottom: 4 },
+  bookingPlateRow:  { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 },
+  bookingVehicle:   { fontSize: 13, color: C.muted },
+  bookingDateRow:   { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  bookingDate:      { fontSize: 11, color: C.subtle },
+  bookingRight:     { alignItems: 'flex-end', justifyContent: 'center' },
+  bookingAmount:    { fontWeight: 'bold', fontSize: 15, color: C.ink, marginBottom: 4 },
   bookingStatusText:{ fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
 
   emptyState:    { alignItems: 'center', paddingVertical: 40 },
-  emptyStateText:{ color: '#6b7280', fontWeight: '500', fontSize: 15, marginTop: 12 },
+  emptyStateText:{ color: C.muted, fontWeight: '500', fontSize: 15, marginTop: 12 },
 
-  // Website management — improved layout
-  websiteCardFull:    { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f9fafb', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb' },
-  websiteCardIconBox: { width: 42, height: 42, borderRadius: 10, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' },
-  websiteCardTitle:   { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  websiteCardDesc:    { fontSize: 12, color: '#9ca3af', lineHeight: 16 },
+  // Website management
+  websiteCardFull:    { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.surface, borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.border },
+  websiteCardIconBox: { width: 42, height: 42, borderRadius: 10, backgroundColor: C.white, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border },
+  websiteCardTitle:   { fontSize: 14, fontWeight: '700', color: C.ink, marginBottom: 2 },
+  websiteCardDesc:    { fontSize: 12, color: C.subtle, lineHeight: 16 },
   websiteTileRow:     { flexDirection: 'row', gap: 10, marginTop: 4 },
-  websiteTile:        { flex: 1, backgroundColor: '#f9fafb', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
+  websiteTile:        { flex: 1, backgroundColor: C.surface, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: C.border, alignItems: 'center' },
   websiteTileIcon:    { width: 52, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  websiteTileTitle:   { fontSize: 13, fontWeight: '700', color: '#111827', marginBottom: 3, textAlign: 'center' },
-  websiteTileDesc:    { fontSize: 11, color: '#9ca3af', textAlign: 'center', lineHeight: 15 },
+  websiteTileTitle:   { fontSize: 13, fontWeight: '700', color: C.ink, marginBottom: 3, textAlign: 'center' },
+  websiteTileDesc:    { fontSize: 11, color: C.subtle, textAlign: 'center', lineHeight: 15 },
 
   // Payment tracker
   paymentTotalBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', margin: 16, padding: 16, backgroundColor: '#f0fdf4', borderRadius: 12, borderWidth: 1, borderColor: '#d1fae5' },
   paymentTotalLabel:  { fontSize: 14, fontWeight: '600', color: '#166534' },
   paymentTotalValue:  { fontSize: 20, fontWeight: '800', color: '#15803d' },
-  paymentLogItem:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  paymentLogEvent:    { fontSize: 14, fontWeight: '600', color: '#111827' },
-  paymentLogCustomer: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  paymentLogTime:     { fontSize: 11, color: '#9ca3af', marginTop: 2 },
+  paymentLogItem:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.borderSoft },
+  paymentLogEvent:    { fontSize: 14, fontWeight: '600', color: C.ink },
+  paymentLogCustomer: { fontSize: 12, color: C.muted, marginTop: 2 },
+  paymentLogTime:     { fontSize: 11, color: C.subtle, marginTop: 2 },
   paymentLogAmount:   { fontSize: 16, fontWeight: '800', color: '#059669' },
 });

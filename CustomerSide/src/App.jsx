@@ -129,7 +129,6 @@ const DetailsModal = ({ isOpen, onClose, car, onRentClick }) => {
   const [variantStats, setVariantStats] = useState({});
   const [colorGroups, setColorGroups] = useState([]);
 
-  // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -144,292 +143,359 @@ const DetailsModal = ({ isOpen, onClose, car, onRentClick }) => {
 
   useEffect(() => {
     const fetchVariants = async () => {
-        if (!car?.id) return;
-        
-        const variantsData = await firebaseService.listVariantsByVehicleId(car.id);
-        const today = new Date().toISOString().split('T')[0];
-        const allBookings = await firebaseService.listConfirmedBookings();
-        const bookings = allBookings.filter(
-          (b) => b.status === "confirmed" && b.rental_end_date >= today && b.rental_start_date <= today
-        );
-  
-        const stats = {};
-        variantsData.forEach(variant => {
-          const isRented = bookings?.some(b => b.vehicle_variant_id === variant.id);
-          stats[variant.id] = {
-            isAvailable: variant.is_available && !isRented,
-            isRented: isRented,
-            isMaintenance: !variant.is_available
-          };
-        });
-  
-        const groups = {};
-        variantsData.forEach(variant => {
-          const colorKey = variant.color.toLowerCase().trim();
-          if (!groups[colorKey]) {
-            groups[colorKey] = {
-              color: variant.color,
-              variants: []
-            };
-          }
-          groups[colorKey].variants.push(variant);
-        });
-  
-        setVariants(variantsData || []);
-        setVariantStats(stats);
-        setColorGroups(Object.values(groups));
-        
-        const firstAvailable = variantsData.find(v => stats[v.id]?.isAvailable);
-        setSelectedVariant(firstAvailable || variantsData[0]);
-      };
+      if (!car?.id) return;
       
-      if (isOpen) fetchVariants();
-    }, [isOpen, car]);
-  
-    if (!isOpen || !car) return null;
-  
-    const getColorHex = (colorName) => {
-      const name = colorName.toLowerCase();
-      if (name.includes("white") || name.includes("pearl")) return "#ffffff";
-      if (name.includes("black") || name.includes("midnight")) return "#1f2937";
-      if (name.includes("silver") || name.includes("metallic")) return "#9ca3af";
-      if (name.includes("red")) return "#dc2626";
-      if (name.includes("blue")) return "#2563eb";
-      if (name.includes("gray") || name.includes("grey")) return "#6b7280";
-      if (name.includes("green")) return "#16a34a";
-      if (name.includes("yellow") || name.includes("gold")) return "#facc15";
-      if (name.includes("orange")) return "#f97316";
-      if (name.includes("brown")) return "#7c4a31";
-      if (name.includes("purple")) return "#8b5cf6";
-      if (name.includes("pink")) return "#ec4899";
-      if (name.includes("beige")) return "#e5decf";
-      return "#e5e7eb";
+      const variantsData = await firebaseService.listVariantsByVehicleId(car.id);
+      const today = new Date().toISOString().split('T')[0];
+      const allBookings = await firebaseService.listConfirmedBookings();
+      const bookings = allBookings.filter(
+        (b) => b.status === "confirmed" && b.rental_end_date >= today && b.rental_start_date <= today
+      );
+
+      const stats = {};
+      variantsData.forEach(variant => {
+        const isRented = bookings?.some(b => b.vehicle_variant_id === variant.id);
+        stats[variant.id] = {
+          isAvailable: variant.is_available && !isRented,
+          isRented: isRented,
+          isMaintenance: !variant.is_available
+        };
+      });
+
+      const groups = {};
+      variantsData.forEach(variant => {
+        const colorKey = variant.color.toLowerCase().trim();
+        if (!groups[colorKey]) {
+          groups[colorKey] = {
+            color: variant.color,
+            variants: []
+          };
+        }
+        groups[colorKey].variants.push(variant);
+      });
+
+      setVariants(variantsData || []);
+      setVariantStats(stats);
+      setColorGroups(Object.values(groups));
+      
+      const firstAvailable = variantsData.find(v => stats[v.id]?.isAvailable);
+      setSelectedVariant(firstAvailable || variantsData[0]);
     };
-  
-    const renderColorSwatch = (colorGroup) => {
-      const bgColor = getColorHex(colorGroup.color);
-      const availableCount = colorGroup.variants.filter(v => variantStats[v.id]?.isAvailable).length;
-      const totalCount = colorGroup.variants.length;
-      const hasAvailable = availableCount > 0;
-      const isSelected = colorGroup.variants.some(v => v.id === selectedVariant?.id);
-  
-      return (
-        <button
-          key={colorGroup.color}
-          onClick={() => {
-            const firstAvailable = colorGroup.variants.find(v => variantStats[v.id]?.isAvailable);
-            setSelectedVariant(firstAvailable || colorGroup.variants[0]);
-          }}
-          disabled={!hasAvailable}
-          className={`relative p-2 rounded-lg border-2 transition-all duration-200
-            ${isSelected 
-              ? 'border-black bg-gray-50 shadow-md' 
-              : hasAvailable 
-                ? 'border-gray-200 hover:border-gray-400 bg-white' 
-                : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-            }
-          `}
-        >
-          <div className="flex flex-col items-center gap-1">
-            <div className="relative">
-              <div
-                className={`w-10 h-10 rounded-full ${isSelected ? 'ring-2 ring-black ring-offset-1' : ''}`}
-                style={{
-                  backgroundColor: bgColor,
-                  border: bgColor === "#ffffff" ? "2px solid #e5e7eb" : "none",
-                }}
-              />
-              
-              {totalCount > 1 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-black text-white text-[9px] rounded-full flex items-center justify-center font-bold border border-white">
-                  {totalCount}
-                </span>
-              )}
-              
-              {!hasAvailable && (
-                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border border-white" />
-              )}
-            </div>
+    
+    if (isOpen) fetchVariants();
+  }, [isOpen, car]);
+
+  if (!isOpen || !car) return null;
+
+  // ── Fuel helpers ────────────────────────────────────────────────────────
+  const getFuelColor = (fuelType) => {
+    if (!fuelType) return "#f59e0b"
+    const f = fuelType.toLowerCase()
+    if (f.includes("electric"))                         return "#3b82f6"
+    if (f.includes("hybrid") || f.includes("plug"))    return "#16a34a"
+    if (f.includes("diesel"))                           return "#0ea5e9"
+    if (f.includes("cng") || f.includes("compressed")) return "#8b5cf6"
+    if (f.includes("lpg") || f.includes("liquefied"))  return "#f97316"
+    return "#f59e0b"
+  }
+
+  const GasPumpSVG = ({ strokeColor }) => (
+    <svg
+      width="12" height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={strokeColor}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 22V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16H3z" />
+      <path d="M15 8h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3" />
+      <rect x="19" y="10" width="2" height="3" rx="1" />
+      <line x1="7" y1="14" x2="11" y2="14" />
+      <rect x="5" y="7" width="8" height="5" rx="1" />
+    </svg>
+  )
+  // ────────────────────────────────────────────────────────────────────────
+
+  const getColorHex = (colorName) => {
+    const name = colorName.toLowerCase();
+    if (name.includes("white") || name.includes("pearl")) return "#ffffff";
+    if (name.includes("black") || name.includes("midnight")) return "#1f2937";
+    if (name.includes("silver") || name.includes("metallic")) return "#9ca3af";
+    if (name.includes("red")) return "#dc2626";
+    if (name.includes("blue")) return "#2563eb";
+    if (name.includes("gray") || name.includes("grey")) return "#6b7280";
+    if (name.includes("green")) return "#16a34a";
+    if (name.includes("yellow") || name.includes("gold")) return "#facc15";
+    if (name.includes("orange")) return "#f97316";
+    if (name.includes("brown")) return "#7c4a31";
+    if (name.includes("purple")) return "#8b5cf6";
+    if (name.includes("pink")) return "#ec4899";
+    if (name.includes("beige")) return "#e5decf";
+    return "#e5e7eb";
+  };
+
+  const renderColorSwatch = (colorGroup) => {
+    const bgColor = getColorHex(colorGroup.color);
+    const availableCount = colorGroup.variants.filter(v => variantStats[v.id]?.isAvailable).length;
+    const totalCount = colorGroup.variants.length;
+    const hasAvailable = availableCount > 0;
+    const isSelected = colorGroup.variants.some(v => v.id === selectedVariant?.id);
+
+    return (
+      <button
+        key={colorGroup.color}
+        onClick={() => {
+          const firstAvailable = colorGroup.variants.find(v => variantStats[v.id]?.isAvailable);
+          setSelectedVariant(firstAvailable || colorGroup.variants[0]);
+        }}
+        disabled={!hasAvailable}
+        className={`relative p-2 rounded-lg border-2 transition-all duration-200
+          ${isSelected 
+            ? 'border-black bg-gray-50 shadow-md' 
+            : hasAvailable 
+              ? 'border-gray-200 hover:border-gray-400 bg-white' 
+              : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+          }
+        `}
+      >
+        <div className="flex flex-col items-center gap-1">
+          <div className="relative">
+            <div
+              className={`w-10 h-10 rounded-full ${isSelected ? 'ring-2 ring-black ring-offset-1' : ''}`}
+              style={{
+                backgroundColor: bgColor,
+                border: bgColor === "#ffffff" ? "2px solid #e5e7eb" : "none",
+              }}
+            />
             
-            <div className="text-center">
-              <div className={`text-xs font-semibold ${isSelected ? 'text-black' : 'text-gray-700'}`}>
-                {colorGroup.color}
-              </div>
-              <div className="text-[10px] text-gray-500">
-                {availableCount}/{totalCount}
-              </div>
+            {totalCount > 1 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-black text-white text-[9px] rounded-full flex items-center justify-center font-bold border border-white">
+                {totalCount}
+              </span>
+            )}
+            
+            {!hasAvailable && (
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border border-white" />
+            )}
+          </div>
+          
+          <div className="text-center">
+            <div className={`text-xs font-semibold ${isSelected ? 'text-black' : 'text-gray-700'}`}>
+              {colorGroup.color}
+            </div>
+            <div className="text-[10px] text-gray-500">
+              {availableCount}/{totalCount}
             </div>
           </div>
-        </button>
-      );
-    };
-  
-    const stats = variantStats[selectedVariant?.id] || {};
-    const colorGroupStats = colorGroups.map(group => ({
-      color: group.color,
-      total: group.variants.length,
-      available: group.variants.filter(v => variantStats[v.id]?.isAvailable).length,
-      rented: group.variants.filter(v => variantStats[v.id]?.isRented).length,
-      maintenance: group.variants.filter(v => variantStats[v.id]?.isMaintenance).length
-    }));
-  
-    return (
-      <div className="fixed inset-0 bg-white z-[9999] flex flex-col">
-        
-        {/* Header - Simple with just close button */}
-        <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <div className="text-2xl font-bold text-gray-900">Vehicle Details</div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all"
-          >
-            <X className="w-5 h-5 text-gray-900" />
-          </button>
         </div>
+      </button>
+    );
+  };
 
-        {/* Main Content - Single Scroll */}
-        <div className="flex-1 overflow-y-auto bg-gray-50">
-          <div className="grid lg:grid-cols-2 gap-0">
-            
-            {/* LEFT - Car Image Only */}
-            <div className="relative bg-white p-8 flex items-center justify-center min-h-[400px]">
-              {/* Default Background */}
-              <div className="absolute inset-0">
-                <img 
-                  src={defaultBackground} 
-                  alt="Background" 
-                  className="w-full h-full object-cover opacity-100"
-                />
-              </div>
-              
-              {/* Car Image */}
-              <div className="relative z-10 w-full max-w-2xl">
-                <img
-                  src={selectedVariant?.image_url || car.image_url || defaultBackground}
-                  alt={`${car.make} ${car.model}`}
-                  className="w-full h-auto object-contain drop-shadow-2xl"
-                />
-              </div>
+  const stats = variantStats[selectedVariant?.id] || {};
+  const fuelColor = getFuelColor(car.fuel_type);
+
+  return (
+    <div className="fixed inset-0 bg-white z-[9999] flex flex-col">
+      
+      {/* Header */}
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="text-2xl font-bold text-gray-900">Vehicle Details</div>
+        <button
+          onClick={onClose}
+          className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all"
+        >
+          <X className="w-5 h-5 text-gray-900" />
+        </button>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="grid lg:grid-cols-2 gap-0">
+          
+          {/* LEFT - Car Image */}
+          <div className="relative bg-white p-8 flex items-center justify-center min-h-[400px]">
+            <div className="absolute inset-0">
+              <img 
+                src={defaultBackground} 
+                alt="Background" 
+                className="w-full h-full object-cover opacity-100"
+              />
             </div>
-    
-            {/* RIGHT - All Details */}
-            <div className="p-6 lg:p-8 bg-gray-50">
-              <div className="max-w-2xl mx-auto space-y-4">
-                
-                {/* Vehicle Title */}
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
-                  <h1 className="text-2xl font-bold text-gray-900">{car.make} {car.model}</h1>
-                  <p className="text-sm text-gray-500 mt-1">{car.year}</p>
-                </div>
-
-                {/* Price */}
-                <div className="bg-black text-white rounded-xl p-4">
-                  <div className="text-xs text-gray-300 mb-1">Daily Rental Rate</div>
-                  <div className="text-3xl font-bold">
-                    ₱{selectedVariant?.price_per_day?.toLocaleString() || car.price_per_day?.toLocaleString()}
-                    <span className="text-base font-normal text-gray-400 ml-2">/day</span>
-                  </div>
-                </div>
-
-                {/* Specifications */}
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
-                  <h3 className="text-base font-bold text-gray-900 mb-3">Specifications</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Mileage</div>
-                      <div className="text-sm font-semibold text-gray-900">
-                        {car.mileage ? `${Number(car.mileage).toLocaleString()} km` : "N/A"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Seats</div>
-                      <div className="text-sm font-semibold text-gray-900">{car.seats} Seater</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Type</div>
-                      <div className="text-sm font-semibold text-gray-900">{car.type || "N/A"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-1">Year</div>
-                      <div className="text-sm font-semibold text-gray-900">{car.year}</div>
-                    </div>
-                  </div>
-                </div>
-    
-                {/* Description */}
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
-                  <h3 className="text-base font-bold text-gray-900 mb-2">Description</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">
-                    {car.description || "Experience luxury and performance with this premium vehicle. Perfect for business trips, special occasions, or when you simply want to enjoy the finest driving experience."}
-                  </p>
-                </div>
-    
-                {/* Color Selection */}
-                <div className="bg-white rounded-xl p-4 border border-gray-200">
-                  <h3 className="text-base font-bold text-gray-900 mb-3">Available Colors</h3>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {colorGroups.map(renderColorSwatch)}
-                  </div>
-                </div>
-
-                {/* Selected Variant Info */}
-                {selectedVariant && (
-                  <div className={`rounded-xl p-4 border-2 ${
-                    stats.isAvailable ? 'bg-green-50 border-green-200' :
-                    stats.isRented ? 'bg-orange-50 border-orange-200' :
-                    'bg-red-50 border-red-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-xs text-gray-600 mb-1">Selected Color</div>
-                        <div className="text-lg font-bold text-gray-900">{selectedVariant.color}</div>
-                        <div className="text-xs text-gray-600 mt-1">
-                          Plate: <span className="font-semibold">{selectedVariant.plate_number}</span>
-                        </div>
-                      </div>
-                      <div className={`px-3 py-1.5 rounded-lg font-semibold text-xs ${
-                        stats.isAvailable ? 'bg-green-600 text-white' :
-                        stats.isRented ? 'bg-orange-600 text-white' :
-                        'bg-red-600 text-white'
-                      }`}>
-                        {stats.isAvailable ? '✓ Available' : stats.isRented ? 'Rented' : 'Maintenance'}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Book Button */}
-                <button
-                  onClick={() => {
-                    if (!stats.isAvailable) {
-                      alert(stats.isRented 
-                        ? 'This color is currently rented. Please select another color or check back later.' 
-                        : 'This vehicle is under maintenance. Please select another color.');
-                      return;
-                    }
-                    onClose();
-                    onRentClick(car, selectedVariant);
-                  }}
-                  disabled={!stats.isAvailable}
-                  className={`w-full py-3 rounded-xl text-base font-bold transition-all ${
-                    stats.isAvailable
-                      ? 'bg-black text-white hover:bg-gray-800'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  {stats.isAvailable ? 'Book This Vehicle' : stats.isRented ? 'Currently Rented' : 'Unavailable'}
-                </button>
+            
+            <div className="relative z-10 w-full max-w-2xl">
+              <img
+                src={selectedVariant?.image_url || car.image_url || defaultBackground}
+                alt={`${car.make} ${car.model}`}
+                className="w-full h-auto object-contain drop-shadow-2xl"
+              />
+            </div>
+          </div>
+  
+          {/* RIGHT - All Details */}
+          <div className="p-6 lg:p-8 bg-gray-50">
+            <div className="max-w-2xl mx-auto space-y-4">
+              
+              {/* Vehicle Title */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <h1 className="text-2xl font-bold text-gray-900">{car.make} {car.model}</h1>
+                <p className="text-sm text-gray-500 mt-1">{car.year}</p>
               </div>
+
+              {/* Price */}
+              <div className="bg-black text-white rounded-xl p-4">
+                <div className="text-xs text-gray-300 mb-1">Daily Rental Rate</div>
+                <div className="text-3xl font-bold">
+                  ₱{selectedVariant?.price_per_day?.toLocaleString() || car.price_per_day?.toLocaleString()}
+                  <span className="text-base font-normal text-gray-400 ml-2">/day</span>
+                </div>
+              </div>
+
+              {/* Deposit Required */}
+              {car.deposit_amount && (
+                <div className="bg-amber-50 rounded-xl p-4 border-2 border-amber-200">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-600 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-amber-900 mb-1">
+                        Security Deposit Required
+                      </div>
+                      <div className="text-2xl font-bold text-amber-900 mb-1">
+                        ₱{Number(car.deposit_amount).toLocaleString()}
+                      </div>
+                      <div className="text-xs text-amber-700">
+                        Refundable deposit • Returned after vehicle inspection
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Specifications */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <h3 className="text-base font-bold text-gray-900 mb-3">Specifications</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Mileage</div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      {car.mileage ? `${Number(car.mileage).toLocaleString()} km` : "N/A"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Seats</div>
+                    <div className="text-sm font-semibold text-gray-900">{car.seats} Seater</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Type</div>
+                    <div className="text-sm font-semibold text-gray-900">{car.type || "N/A"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Year</div>
+                    <div className="text-sm font-semibold text-gray-900">{car.year}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Fuel Type</div>
+                    <div
+                      className="text-sm font-semibold flex items-center gap-1.5"
+                      style={{ color: fuelColor }}
+                    >
+                      <div
+                        className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: `${fuelColor}1a` }}
+                      >
+                        <GasPumpSVG strokeColor={fuelColor} />
+                      </div>
+                      {car.fuel_type || "N/A"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Deposit</div>
+                    <div className="text-sm font-semibold text-amber-700">
+                      ₱{Number(car.deposit_amount || 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+  
+              {/* Description */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <h3 className="text-base font-bold text-gray-900 mb-2">Description</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {car.description || "Experience luxury and performance with this premium vehicle. Perfect for business trips, special occasions, or when you simply want to enjoy the finest driving experience."}
+                </p>
+              </div>
+  
+              {/* Color Selection */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <h3 className="text-base font-bold text-gray-900 mb-3">Available Colors</h3>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {colorGroups.map(renderColorSwatch)}
+                </div>
+              </div>
+
+              {/* Selected Variant Info */}
+              {selectedVariant && (
+                <div className={`rounded-xl p-4 border-2 ${
+                  stats.isAvailable ? 'bg-green-50 border-green-200' :
+                  stats.isRented ? 'bg-orange-50 border-orange-200' :
+                  'bg-red-50 border-red-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-gray-600 mb-1">Selected Color</div>
+                      <div className="text-lg font-bold text-gray-900">{selectedVariant.color}</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Plate: <span className="font-semibold">{selectedVariant.plate_number}</span>
+                      </div>
+                    </div>
+                    <div className={`px-3 py-1.5 rounded-lg font-semibold text-xs ${
+                      stats.isAvailable ? 'bg-green-600 text-white' :
+                      stats.isRented ? 'bg-orange-600 text-white' :
+                      'bg-red-600 text-white'
+                    }`}>
+                      {stats.isAvailable ? '✓ Available' : stats.isRented ? 'Rented' : 'Maintenance'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Book Button */}
+              <button
+                onClick={() => {
+                  if (!stats.isAvailable) {
+                    alert(stats.isRented 
+                      ? 'This color is currently rented. Please select another color or check back later.' 
+                      : 'This vehicle is under maintenance. Please select another color.');
+                    return;
+                  }
+                  onClose();
+                  onRentClick(car, selectedVariant);
+                }}
+                disabled={!stats.isAvailable}
+                className={`w-full py-3 rounded-xl text-base font-bold transition-all ${
+                  stats.isAvailable
+                    ? 'bg-black text-white hover:bg-gray-800'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {stats.isAvailable ? 'Book This Vehicle' : stats.isRented ? 'Currently Rented' : 'Unavailable'}
+              </button>
             </div>
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 /* ===========================
    Rental Modal - Complete with Delivery Fee Note
    =========================== */
-
 const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
   const [formData, setFormData] = useState({
     fullName: "",
@@ -473,16 +539,13 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
 
   const fetchBookedDates = async (variantId) => {
     if (!variantId) return
-    
     try {
       const data = await firebaseService.listBookingsByVariantId(variantId)
-
       if (data?.length) {
         const dates = []
         data.forEach(booking => {
           const start = new Date(booking.rental_start_date)
           const end = new Date(booking.rental_end_date)
-          
           for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             dates.push(new Date(d).toISOString().split('T')[0])
           }
@@ -499,24 +562,17 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
     setVariantsLoading(true)
     try {
       const data = await firebaseService.listVariantsByVehicleId(selectedCar.id)
-  
       if (data?.length) {
         setVariants(data)
-        
         const groups = {}
         data.forEach(variant => {
           const colorKey = variant.color.toLowerCase().trim()
           if (!groups[colorKey]) {
-            groups[colorKey] = {
-              color: variant.color,
-              variants: []
-            }
+            groups[colorKey] = { color: variant.color, variants: [] }
           }
           groups[colorKey].variants.push(variant)
         })
-        
         setColorGroups(Object.values(groups))
-        
         const firstVariant = data.find(v => v.is_available) || data[0]
         if (firstVariant) {
           setSelectedVariant(firstVariant)
@@ -546,7 +602,6 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
         const days = diffDays === 0 ? 1 : diffDays
         setRentalDays(days)
         const basePrice = days * (selectedVariant?.price_per_day || selectedCar.price_per_day || 0)
-        // No delivery fee added to total - will be charged when delivered
         setTotalPrice(basePrice)
       } else {
         setRentalDays(0)
@@ -573,11 +628,7 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
   }
 
   const getVehicleSummary = () => {
-    const parts = [
-      selectedCar?.year,
-      selectedCar?.make,
-      selectedCar?.model,
-    ].filter(Boolean)
+    const parts = [selectedCar?.year, selectedCar?.make, selectedCar?.model].filter(Boolean)
     const base = parts.join(" ") || "Selected vehicle"
     const color = selectedVariant?.color ? ` (${selectedVariant.color})` : ""
     return `${base}${color}`
@@ -605,21 +656,10 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
   }
 
   const validateBookingForm = () => {
-    if (!formData.vehicleVariantId) {
-      return "Please select a color variant."
-    }
-    if (!govIdFile) {
-      return "Please upload a valid Driver's License Card image."
-    }
-    if (!formData.pickupDate || !formData.returnDate) {
-      return "Please set a valid rental date range."
-    }
-    if (formData.deliveryOption === 'pickup' && !formData.pickupLocation) {
-      return "Please enter a pickup location."
-    }
-    if (formData.deliveryOption === 'deliver' && !formData.deliveryAddress) {
-      return "Please enter a delivery address."
-    }
+    if (!formData.vehicleVariantId) return "Please select a color variant."
+    if (!govIdFile) return "Please upload a valid Driver's License Card image."
+    if (!formData.pickupDate || !formData.returnDate) return "Please set a valid rental date range."
+    if (formData.deliveryOption === 'deliver' && !formData.deliveryAddress) return "Please enter a delivery address."
 
     const start = new Date(formData.pickupDate)
     const end = new Date(formData.returnDate)
@@ -651,30 +691,19 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
     const file = e.target.files?.[0]
     if (!file) return
     const allowed = ["image/jpeg", "image/png", "image/jpg"]
-    if (!allowed.includes(file.type)) {
-      showToast("error", "Only JPG/PNG images allowed.")
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      showToast("error", "File size must be under 5MB")
-      return
-    }
+    if (!allowed.includes(file.type)) { showToast("error", "Only JPG/PNG images allowed."); return }
+    if (file.size > 5 * 1024 * 1024) { showToast("error", "File size must be under 5MB"); return }
     setGovIdFile(file)
     setGovIdPreview(URL.createObjectURL(file))
   }
 
-  const isDateBooked = (dateString) => {
-    return bookedDates.includes(dateString)
-  }
+  const isDateBooked = (dateString) => bookedDates.includes(dateString)
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (isSubmitting) return
     const validationError = validateBookingForm()
-    if (validationError) {
-      showToast("error", validationError)
-      return
-    }
+    if (validationError) { showToast("error", validationError); return }
     setContractSignature("")
     setContractError("")
     setContractModalVisible(true)
@@ -682,7 +711,6 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
 
   const submitBooking = async (contractDetails) => {
     setIsSubmitting(true)
-
     try {
       const fileName = `${Date.now()}_${govIdFile.name}`
       const govIdUrl = await firebaseService.uploadGovId(fileName, govIdFile)
@@ -699,7 +727,7 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
         customer_phone: formData.phone,
         rental_start_date: formData.pickupDate,
         rental_end_date: formData.returnDate,
-        pickup_location: formData.deliveryOption === 'pickup' ? formData.pickupLocation : formData.deliveryAddress,
+        pickup_location: formData.deliveryOption === 'deliver' ? formData.deliveryAddress : null,
         delivery_option: formData.deliveryOption,
         delivery_address: formData.deliveryOption === 'deliver' ? formData.deliveryAddress : null,
         license_number: formData.licenseNumber,
@@ -725,7 +753,6 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
           variantColor: selectedVariant?.color,
           rental_start_date: formData.pickupDate,
           rental_end_date: formData.returnDate,
-          pickup_location: formData.deliveryOption === 'pickup' ? formData.pickupLocation : formData.deliveryAddress,
           delivery_option: formData.deliveryOption,
           total_price: totalPrice,
           contractText: contractDetails?.text,
@@ -736,14 +763,11 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
 
         const emailResponse = await fetch('http://localhost:3001/api/send-booking-email', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(emailData)
         })
 
         const emailResult = await emailResponse.json()
-        
         if (emailResult.success) {
           showToast("success", "Booking submitted and confirmation email sent!")
         } else {
@@ -757,7 +781,7 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
       await refreshBookings?.()
       await refreshVariants()
       setTimeout(() => onClose(), 1200)
-      
+
     } catch (err) {
       console.error(err)
       showToast("error", "Booking failed. Please try again.")
@@ -769,22 +793,12 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
   const handleContractConfirm = async () => {
     if (isSubmitting) return
     const validationError = validateBookingForm()
-    if (validationError) {
-      showToast("error", validationError)
-      setContractError(validationError)
-      return
-    }
-
-    if (!contractSignature.trim()) {
-      setContractError("Please type your full name to sign the contract.")
-      return
-    }
-
+    if (validationError) { showToast("error", validationError); setContractError(validationError); return }
+    if (!contractSignature.trim()) { setContractError("Please type your full name to sign the contract."); return }
     if (normalizeName(contractSignature) !== normalizeName(formData.fullName)) {
       setContractError("The name you entered must exactly match your full name on the form.")
       return
     }
-
     const signedAtISO = new Date().toISOString()
     const contractDetails = buildContractDetails(signedAtISO)
     setContractModalVisible(false)
@@ -798,6 +812,37 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
     setContractSignature("")
     setContractError("")
   }
+
+  // ── Fuel helpers ────────────────────────────────────────────────────────
+  const getFuelColor = (fuelType) => {
+    if (!fuelType) return "#f59e0b"
+    const f = fuelType.toLowerCase()
+    if (f.includes("electric"))                         return "#3b82f6"
+    if (f.includes("hybrid") || f.includes("plug"))    return "#16a34a"
+    if (f.includes("diesel"))                           return "#0ea5e9"
+    if (f.includes("cng") || f.includes("compressed")) return "#8b5cf6"
+    if (f.includes("lpg") || f.includes("liquefied"))  return "#f97316"
+    return "#f59e0b"
+  }
+
+  const GasPumpSVG = ({ strokeColor }) => (
+    <svg
+      width="14" height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={strokeColor}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 22V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16H3z" />
+      <path d="M15 8h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3" />
+      <rect x="19" y="10" width="2" height="3" rx="1" />
+      <line x1="7" y1="14" x2="11" y2="14" />
+      <rect x="5" y="7" width="8" height="5" rx="1" />
+    </svg>
+  )
+  // ────────────────────────────────────────────────────────────────────────
 
   const getColorHex = (colorName) => {
     const name = colorName.toLowerCase()
@@ -818,12 +863,10 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
   }
 
   const renderColorGroupSwatch = (colorGroup) => {
-    const colorName = colorGroup.color.toLowerCase()
-    let bgColor = getColorHex(colorGroup.color)
+    const bgColor = getColorHex(colorGroup.color)
     const availableCount = colorGroup.variants.filter(v => v.is_available).length
     const totalCount = colorGroup.variants.length
     const isSelected = colorGroup.variants.some(v => v.id === selectedVariant?.id)
-
     return (
       <div key={colorGroup.color} className="relative group">
         <button
@@ -854,22 +897,19 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
   if (!isOpen) return null
 
   const displayCar = selectedCar || {
-    make: 'Toyota',
-    model: 'Camry',
-    year: 2024,
-    seats: 5,
-    price_per_day: 3500,
-    image_url: defaultBackground
+    make: 'Toyota', model: 'Camry', year: 2024, seats: 5,
+    price_per_day: 3500, image_url: defaultBackground
   }
 
   const basePrice = rentalDays * (selectedVariant?.price_per_day || displayCar?.price_per_day || 0)
+  const fuelColor = getFuelColor(displayCar?.fuel_type)
 
   return (
     <>
       <Toast {...toast} onClose={hideToast} />
       <div className="fixed inset-0 bg-white z-[9998] flex flex-col">
         <div className="bg-white w-full h-full overflow-hidden flex flex-col">
-          
+
           {/* Header */}
           <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900">Complete Your Booking</h2>
@@ -881,21 +921,16 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
             </button>
           </div>
 
-          {/* Main Content - SINGLE SCROLL */}
+          {/* Main Content */}
           <div className="flex-1 overflow-y-auto">
             <div className="grid lg:grid-cols-5 gap-0">
-              
-              {/* Left Side - Vehicle Display (2 cols) */}
+
+              {/* Left — Vehicle Display */}
               <div className="lg:col-span-2 bg-gradient-to-br from-gray-50 to-white p-6">
                 <div className="max-w-md mx-auto space-y-6">
-                  
-                  {/* Vehicle Image */}
+
                   <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl border border-gray-200">
-                    <img
-                      src={defaultBackground}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      alt="Background"
-                    />
+                    <img src={defaultBackground} className="absolute inset-0 w-full h-full object-cover" alt="Background" />
                     {(selectedVariant?.image_url || displayCar?.image_url) && (
                       <div className="absolute inset-0 flex items-center justify-center p-6">
                         <img
@@ -907,23 +942,25 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                     )}
                   </div>
 
-                  {/* Vehicle Info */}
                   <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                      {displayCar?.make} {displayCar?.model}
-                    </h3>
-                    
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3">{displayCar?.make} {displayCar?.model}</h3>
                     <div className="flex items-center gap-3 mb-4 flex-wrap">
                       <span className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full text-sm font-medium">
-                        <Calendar className="w-4 h-4" />
-                        {displayCar?.year}
+                        <Calendar className="w-4 h-4" />{displayCar?.year}
                       </span>
                       <span className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full text-sm font-medium">
-                        <IoPeopleOutline className="w-4 h-4" />
-                        {displayCar?.seats} seats
+                        <IoPeopleOutline className="w-4 h-4" />{displayCar?.seats} seats
                       </span>
+                      {displayCar?.fuel_type && (
+                        <span
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold"
+                          style={{ color: fuelColor, backgroundColor: `${fuelColor}1a` }}
+                        >
+                          <GasPumpSVG strokeColor={fuelColor} />
+                          {displayCar.fuel_type}
+                        </span>
+                      )}
                     </div>
-
                     <div className="border-t border-gray-200 pt-4 mb-4">
                       <div className="text-3xl font-bold text-gray-900">
                         ₱{(selectedVariant?.price_per_day || displayCar?.price_per_day)?.toLocaleString()}
@@ -931,23 +968,34 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                       </div>
                     </div>
 
-                    {/* Color Selection */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-3">
-                        Select Color
-                      </label>
-                      <div className="flex flex-wrap gap-3 mb-3">
-                        {colorGroups.map(renderColorGroupSwatch)}
+                    {/* Deposit Info */}
+                    {displayCar?.deposit_amount && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <svg className="w-4 h-4 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-xs font-bold text-amber-900">Security Deposit Required</span>
+                        </div>
+                        <div className="text-lg font-bold text-amber-900">
+                          ₱{Number(displayCar.deposit_amount).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-amber-700 mt-1">
+                          Refundable • Returned after inspection
+                        </div>
                       </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">Select Color</label>
+                      <div className="flex flex-wrap gap-3 mb-3">{colorGroups.map(renderColorGroupSwatch)}</div>
                       {selectedVariant && (
                         <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                           <p className="text-sm text-gray-600">
                             <span className="font-semibold text-gray-900">{selectedVariant.color}</span>
                             {colorGroups.length > 0 && (
                               <span className="ml-2">
-                                ({colorGroups.find(g => 
-                                  g.variants.some(v => v.id === selectedVariant.id)
-                                )?.variants.filter(v => v.is_available).length || 0} available)
+                                ({colorGroups.find(g => g.variants.some(v => v.id === selectedVariant.id))?.variants.filter(v => v.is_available).length || 0} available)
                               </span>
                             )}
                           </p>
@@ -958,10 +1006,10 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                 </div>
               </div>
 
-              {/* Right Side - Form + Pricing (3 cols) */}
+              {/* Right — Form */}
               <div className="lg:col-span-3 p-6 lg:p-8">
                 <form onSubmit={handleSubmit} className="max-w-3xl mx-auto space-y-6">
-                  
+
                   {/* Personal Information */}
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-3">
@@ -973,56 +1021,32 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
-                        <input
-                          type="text"
-                          name="fullName"
-                          value={formData.fullName}
-                          onChange={handleInputChange}
-                          required
+                        <input type="text" name="fullName" value={formData.fullName} onChange={handleInputChange} required
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-                          placeholder="Enter your full name"
-                        />
+                          placeholder="Enter your full name" />
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address *</label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={formData.email}
-                          onChange={handleInputChange}
-                          required
+                        <input type="email" name="email" value={formData.email} onChange={handleInputChange} required
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-                          placeholder="your@email.com"
-                        />
+                          placeholder="your@email.com" />
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number *</label>
-                        <input
-                          type="tel"
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handleInputChange}
-                          required
+                        <input type="tel" name="phone" value={formData.phone} onChange={handleInputChange} required
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-                          placeholder="+63 XXX XXX XXXX"
-                        />
+                          placeholder="+63 XXX XXX XXXX" />
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">License Number *</label>
-                        <input
-                          type="text"
-                          name="licenseNumber"
-                          value={formData.licenseNumber}
-                          onChange={handleInputChange}
-                          required
+                        <input type="text" name="licenseNumber" value={formData.licenseNumber} onChange={handleInputChange} required
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-                          placeholder="Enter license number"
-                        />
+                          placeholder="Enter license number" />
                       </div>
                     </div>
                   </div>
 
-                  {/* Rental Details */}
+                  {/* Rental Period */}
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-3">
                       <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
@@ -1033,41 +1057,20 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Pickup Date *</label>
-                        <input
-                          type="date"
-                          name="pickupDate"
-                          value={formData.pickupDate}
-                          onChange={handleInputChange}
-                          min={new Date().toISOString().split("T")[0]}
-                          required
-                          disabled={!selectedVariant}
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        />
-                        {!selectedVariant && (
-                          <p className="text-xs text-amber-600 mt-1">Select a color first</p>
-                        )}
-                        {formData.pickupDate && isDateBooked(formData.pickupDate) && (
-                          <p className="text-xs text-red-600 mt-1">This date is already booked</p>
-                        )}
+                        <input type="date" name="pickupDate" value={formData.pickupDate} onChange={handleInputChange}
+                          min={new Date().toISOString().split("T")[0]} required disabled={!selectedVariant}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                        {!selectedVariant && <p className="text-xs text-amber-600 mt-1">Select a color first</p>}
+                        {formData.pickupDate && isDateBooked(formData.pickupDate) && <p className="text-xs text-red-600 mt-1">This date is already booked</p>}
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Return Date *</label>
-                        <input
-                          type="date"
-                          name="returnDate"
-                          value={formData.returnDate}
-                          onChange={handleInputChange}
-                          min={formData.pickupDate || new Date().toISOString().split("T")[0]}
-                          required
+                        <input type="date" name="returnDate" value={formData.returnDate} onChange={handleInputChange}
+                          min={formData.pickupDate || new Date().toISOString().split("T")[0]} required
                           disabled={!selectedVariant || !formData.pickupDate}
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        />
-                        {!formData.pickupDate && selectedVariant && (
-                          <p className="text-xs text-amber-600 mt-1">Select pickup date first</p>
-                        )}
-                        {formData.returnDate && isDateBooked(formData.returnDate) && (
-                          <p className="text-xs text-red-600 mt-1">This date is already booked</p>
-                        )}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                        {!formData.pickupDate && selectedVariant && <p className="text-xs text-amber-600 mt-1">Select pickup date first</p>}
+                        {formData.returnDate && isDateBooked(formData.returnDate) && <p className="text-xs text-red-600 mt-1">This date is already booked</p>}
                       </div>
                     </div>
                     {bookedDates.length > 0 && selectedVariant && (
@@ -1079,112 +1082,118 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                     )}
                   </div>
 
-                  {/* Pickup/Delivery Options */}
+                  {/* Pickup or Delivery */}
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-3">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-3">
                       <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
                         <MapPin className="w-4 h-4 text-white" />
                       </div>
                       Pickup or Delivery
                     </h3>
-                    
-                    <div className="grid gap-3 md:grid-cols-2 mb-4">
+                    <p className="text-sm text-gray-500 mb-4 ml-11">
+                      Choose how you'd like to receive the vehicle.
+                    </p>
+
+                    <div className="grid gap-3 md:grid-cols-2 mb-5">
                       <button
                         type="button"
                         onClick={() => setFormData(s => ({ ...s, deliveryOption: 'pickup', deliveryAddress: '' }))}
-                        className={`p-4 rounded-lg border-2 transition-all ${
+                        className={`p-4 rounded-xl border-2 transition-all text-left ${
                           formData.deliveryOption === 'pickup'
-                            ? 'border-gray-900 bg-gray-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-gray-900 bg-gray-50 shadow-sm'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        <div className="flex items-start gap-3">
+                          <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
                             formData.deliveryOption === 'pickup' ? 'border-gray-900' : 'border-gray-300'
                           }`}>
-                            {formData.deliveryOption === 'pickup' && (
-                              <div className="w-3 h-3 rounded-full bg-gray-900"></div>
-                            )}
+                            {formData.deliveryOption === 'pickup' && <div className="w-3 h-3 rounded-full bg-gray-900" />}
                           </div>
-                          <div className="text-left">
-                            <div className="font-semibold text-gray-900">Pickup</div>
-                            <div className="text-xs text-gray-600">Pick up at location</div>
+                          <div>
+                            <div className="font-semibold text-gray-900 flex items-center gap-2">
+                              🏠 Self-Pickup
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1 leading-relaxed">
+                              Pick up the car at the owner's garage
+                            </div>
                           </div>
                         </div>
                       </button>
-                      
+
                       <button
                         type="button"
                         onClick={() => setFormData(s => ({ ...s, deliveryOption: 'deliver', pickupLocation: '' }))}
-                        className={`p-4 rounded-lg border-2 transition-all ${
+                        className={`p-4 rounded-xl border-2 transition-all text-left ${
                           formData.deliveryOption === 'deliver'
-                            ? 'border-gray-900 bg-gray-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-gray-900 bg-gray-50 shadow-sm'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        <div className="flex items-start gap-3">
+                          <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
                             formData.deliveryOption === 'deliver' ? 'border-gray-900' : 'border-gray-300'
                           }`}>
-                            {formData.deliveryOption === 'deliver' && (
-                              <div className="w-3 h-3 rounded-full bg-gray-900"></div>
-                            )}
+                            {formData.deliveryOption === 'deliver' && <div className="w-3 h-3 rounded-full bg-gray-900" />}
                           </div>
-                          <div className="text-left">
-                            <div className="font-semibold text-gray-900">Delivery</div>
-                            <div className="text-xs text-gray-600">We deliver to you</div>
+                          <div>
+                            <div className="font-semibold text-gray-900 flex items-center gap-2">
+                              🚗 Delivery
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1 leading-relaxed">
+                              We deliver the car to your address
+                            </div>
                           </div>
                         </div>
                       </button>
                     </div>
 
-                    {/* Delivery Fee Note */}
-                    {formData.deliveryOption === 'deliver' && (
-                      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
+                    {formData.deliveryOption === 'pickup' && (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
                         <div className="flex-shrink-0 mt-0.5">
-                          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          <svg className="w-5 h-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zm0 16a2 2 0 002-2H8a2 2 0 002 2z" />
                           </svg>
                         </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-blue-900 mb-1">
-                            📍 Delivery Fee Information
+                        <div>
+                          <p className="text-sm font-semibold text-amber-900 mb-1">
+                            Pickup location will be sent after approval
                           </p>
-                          <p className="text-sm text-blue-800">
-                            Delivery fee will be calculated based on the distance (kilometers) from our location to your delivery address. 
-                            The exact fee will be determined and charged when the vehicle is delivered to you.
+                          <p className="text-sm text-amber-800 leading-relaxed">
+                            The exact garage address of the vehicle owner will be shared with you once your booking is <strong>approved or confirmed</strong>. There's no need to enter a location at this stage.
                           </p>
                         </div>
                       </div>
                     )}
 
-                    {formData.deliveryOption === 'pickup' && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Pickup Location *</label>
-                        <input
-                          type="text"
-                          name="pickupLocation"
-                          value={formData.pickupLocation}
-                          onChange={handleInputChange}
-                          required
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
-                          placeholder="Enter pickup location"
-                        />
-                      </div>
-                    )}
-
                     {formData.deliveryOption === 'deliver' && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Address *</label>
-                        <textarea
-                          name="deliveryAddress"
-                          value={formData.deliveryAddress}
-                          onChange={handleInputChange}
-                          required
-                          rows="3"
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all resize-none"
-                          placeholder="Enter complete delivery address"
-                        />
+                      <div className="space-y-4">
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+                          <div className="flex-shrink-0 mt-0.5">
+                            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-blue-900 mb-1">Delivery fee charged on arrival</p>
+                            <p className="text-sm text-blue-800 leading-relaxed">
+                              The fee is calculated based on the distance from the owner's garage to your address and will be charged when the vehicle is delivered to you.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Delivery Address *</label>
+                          <textarea
+                            name="deliveryAddress"
+                            value={formData.deliveryAddress}
+                            onChange={handleInputChange}
+                            required
+                            rows="3"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all resize-none"
+                            placeholder="Enter your complete delivery address"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1200,35 +1209,23 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-3">Upload Driver's License *</label>
                       <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-gray-400 hover:bg-gray-50 transition-all duration-300">
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg"
-                          onChange={handleFileChange}
-                          className="hidden"
-                          id="govId"
-                        />
+                        <input type="file" accept="image/png,image/jpeg" onChange={handleFileChange} className="hidden" id="govId" />
                         <label htmlFor="govId" className="cursor-pointer block">
                           {govIdPreview ? (
-                            <img
-                              src={govIdPreview}
-                              alt="ID Preview"
-                              className="mx-auto mb-3 max-h-32 rounded-lg object-contain shadow-md"
-                            />
+                            <img src={govIdPreview} alt="ID Preview" className="mx-auto mb-3 max-h-32 rounded-lg object-contain shadow-md" />
                           ) : (
                             <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                               <Upload className="w-6 h-6 text-gray-600" />
                             </div>
                           )}
-                          <p className="text-base font-medium text-gray-700 mb-1">
-                            {govIdPreview ? "Click to change" : "Click to upload"}
-                          </p>
+                          <p className="text-base font-medium text-gray-700 mb-1">{govIdPreview ? "Click to change" : "Click to upload"}</p>
                           <p className="text-sm text-gray-500">JPEG or PNG (Max 5MB)</p>
                         </label>
                       </div>
                     </div>
                   </div>
 
-                  {/* PRICING SUMMARY + SUBMIT BUTTON */}
+                  {/* Pricing Summary + Submit */}
                   <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-6 shadow-lg text-white">
                     <h4 className="text-sm font-semibold text-gray-300 mb-3">Pricing Summary</h4>
                     <div className="space-y-2 mb-4">
@@ -1236,6 +1233,12 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                         <span className="text-gray-300">Rental ({rentalDays} {rentalDays === 1 ? 'day' : 'days'})</span>
                         <span className="font-semibold">₱{basePrice.toLocaleString()}</span>
                       </div>
+                      {displayCar?.deposit_amount && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">Security Deposit</span>
+                          <span className="font-semibold text-amber-300">₱{Number(displayCar.deposit_amount).toLocaleString()}</span>
+                        </div>
+                      )}
                       {formData.deliveryOption === 'deliver' && (
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-300">Delivery Fee</span>
@@ -1248,27 +1251,26 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                         <span className="text-lg font-semibold">Rental Total</span>
                         <span className="text-3xl font-bold">₱{totalPrice.toLocaleString()}</span>
                       </div>
+                      {displayCar?.deposit_amount && (
+                        <p className="text-xs text-gray-400 mt-2">* Plus ₱{Number(displayCar.deposit_amount).toLocaleString()} refundable deposit</p>
+                      )}
                       {formData.deliveryOption === 'deliver' && (
-                        <p className="text-xs text-gray-400 mt-2">
-                          * Delivery fee will be added based on distance
-                        </p>
+                        <p className="text-xs text-gray-400 mt-1">* Delivery fee will be added based on distance</p>
                       )}
                     </div>
-
-                    {/* Submit Button */}
                     <button
                       type="submit"
                       disabled={isSubmitting || !selectedVariant}
                       className={`w-full px-6 py-4 rounded-xl text-lg font-bold transition-all duration-300 transform
-                        ${
-                          isSubmitting || !selectedVariant
-                            ? "bg-gray-600 text-gray-300 cursor-not-allowed"
-                            : "bg-white text-gray-900 hover:bg-gray-100 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                        ${isSubmitting || !selectedVariant
+                          ? "bg-gray-600 text-gray-300 cursor-not-allowed"
+                          : "bg-white text-gray-900 hover:bg-gray-100 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
                         }`}
                     >
                       {isSubmitting ? "Processing..." : "Confirm Booking"}
                     </button>
                   </div>
+
                 </form>
               </div>
             </div>
@@ -1280,11 +1282,8 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
       {contractModalVisible && (
         <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl p-8 relative max-h-[90vh] overflow-y-auto">
-            <button
-              type="button"
-              onClick={handleContractClose}
-              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center hover:bg-gray-200 transition-colors"
-            >
+            <button type="button" onClick={handleContractClose}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center hover:bg-gray-200 transition-colors">
               <X className="w-5 h-5" />
             </button>
 
@@ -1293,7 +1292,7 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
               <p className="text-sm text-gray-600">
                 Please review and sign our rental damage responsibility agreement before submitting your booking.
               </p>
-              
+
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <h4 className="font-semibold text-gray-900 mb-2">Rental Summary</h4>
                 <p className="text-sm text-gray-700 mb-1">
@@ -1306,10 +1305,24 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                 <p className="text-sm text-gray-700">
                   <span className="font-medium">Rental Total:</span> ₱{totalPrice.toLocaleString()}
                 </p>
-                {formData.deliveryOption === 'deliver' && (
-                  <p className="text-sm text-blue-700 mt-2">
-                    <span className="font-medium">Delivery:</span> Fee will be charged when delivered (based on distance)
+                {displayCar?.deposit_amount && (
+                  <p className="text-sm text-amber-700 mt-2">
+                    <span className="font-medium">Deposit:</span> ₱{Number(displayCar.deposit_amount).toLocaleString()} (Refundable)
                   </p>
+                )}
+                {formData.deliveryOption === 'pickup' && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">🏠 Self-Pickup:</span> The owner's garage address will be sent to you once your booking is approved or confirmed.
+                    </p>
+                  </div>
+                )}
+                {formData.deliveryOption === 'deliver' && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <span className="font-semibold">🚗 Delivery:</span> Delivery fee will be charged based on distance when the vehicle is delivered to you.
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -1319,8 +1332,14 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                   <li>You accept full financial responsibility for any damage, loss, theft, or violations during your rental period.</li>
                   <li>You agree to notify The Rental Den immediately if an incident happens and to cooperate with any insurance requirements.</li>
                   <li>You agree to cover repair, downtime, and administrative costs that are not covered by insurance.</li>
+                  {displayCar?.deposit_amount && (
+                    <li>You understand that a security deposit of ₱{Number(displayCar.deposit_amount).toLocaleString()} will be collected and refunded after vehicle inspection.</li>
+                  )}
+                  {formData.deliveryOption === 'pickup' && (
+                    <li>You understand that the pickup address (owner's garage) will be provided to you once your booking is approved or confirmed.</li>
+                  )}
                   {formData.deliveryOption === 'deliver' && (
-                    <li>You understand that delivery fee will be calculated based on the actual distance and charged when the vehicle is delivered.</li>
+                    <li>You understand that the delivery fee will be calculated based on actual distance and charged when the vehicle is delivered.</li>
                   )}
                   <li>Typing your full name below serves as your legally binding digital signature.</li>
                 </ul>
@@ -1337,27 +1356,18 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
                   placeholder={formData.fullName || "Enter your full name"}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
                 />
-                {contractError && (
-                  <p className="text-sm text-red-600 mt-2">{contractError}</p>
-                )}
+                {contractError && <p className="text-sm text-red-600 mt-2">{contractError}</p>}
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={handleContractClose}
-                  className="px-6 py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-all"
-                >
+                <button type="button" onClick={handleContractClose}
+                  className="px-6 py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-all">
                   Review Form
                 </button>
-                <button
-                  type="button"
-                  onClick={handleContractConfirm}
-                  disabled={isSubmitting}
+                <button type="button" onClick={handleContractConfirm} disabled={isSubmitting}
                   className={`px-6 py-3 rounded-xl text-white font-semibold transition-all ${
                     isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-gray-900 hover:bg-gray-800"
-                  }`}
-                >
+                  }`}>
                   {isSubmitting ? "Processing..." : "Sign & Submit"}
                 </button>
               </div>
@@ -1365,14 +1375,6 @@ const RentalModal = ({ isOpen, onClose, selectedCar, refreshBookings }) => {
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes slide-in {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        .animate-slide-in { animation: slide-in 0.3s ease-out; }
-      `}</style>
     </>
   )
 }
@@ -2197,16 +2199,16 @@ const HowItWorks = () => {
 /* ===========================
    Improved CarCard Component - Compact & Modern
    =========================== */
+// CarCard.jsx — React web component
 const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
   const [colorStats, setColorStats] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [cardRef, cardVisible] = useScrollAnimation()
 
-  // Check if vehicle is owned by Rental Den
   const isRentalDenVehicle = (vehicle) => {
     const ownerName = (vehicle.owner_name || '').toLowerCase().trim()
-    return ownerName === 'rental den' || 
-           ownerName === 'the rental den' || 
+    return ownerName === 'rental den' ||
+           ownerName === 'the rental den' ||
            ownerName.includes('rental den')
   }
 
@@ -2216,7 +2218,6 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
     const fetchVariantStats = async () => {
       if (!car?.id) return;
       setIsLoading(true);
-
       try {
         const variants = await firebaseService.listVariantsByVehicleId(car.id);
         const today = new Date().toISOString().split('T')[0];
@@ -2226,31 +2227,18 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
         );
 
         const colorGroups = {};
-        
         variants.forEach(variant => {
           const colorKey = variant.color.toLowerCase().trim();
-          
           if (!colorGroups[colorKey]) {
-            colorGroups[colorKey] = {
-              color: variant.color,
-              total: 0,
-              available: 0,
-              rented: 0,
-              unavailable: 0
-            };
+            colorGroups[colorKey] = { color: variant.color, total: 0, available: 0, rented: 0, unavailable: 0 };
           }
-          
           colorGroups[colorKey].total++;
-          
           if (!variant.is_available) {
             colorGroups[colorKey].unavailable++;
           } else {
             const isRented = bookings?.some(b => b.vehicle_variant_id === variant.id);
-            if (isRented) {
-              colorGroups[colorKey].rented++;
-            } else {
-              colorGroups[colorKey].available++;
-            }
+            if (isRented) colorGroups[colorKey].rented++;
+            else          colorGroups[colorKey].available++;
           }
         });
 
@@ -2262,29 +2250,72 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
         setIsLoading(false);
       }
     };
-
     fetchVariantStats();
   }, [car?.id]);
 
   const getColorHex = (colorName) => {
     const name = colorName.toLowerCase();
-    if (name.includes("white") || name.includes("pearl")) return "#ffffff";
+    if (name.includes("white") || name.includes("pearl"))    return "#ffffff";
     if (name.includes("black") || name.includes("midnight")) return "#1f2937";
-    if (name.includes("silver") || name.includes("metallic")) return "#9ca3af";
-    if (name.includes("red")) return "#dc2626";
-    if (name.includes("blue")) return "#2563eb";
+    if (name.includes("silver") || name.includes("metallic"))return "#9ca3af";
+    if (name.includes("red"))    return "#dc2626";
+    if (name.includes("blue"))   return "#2563eb";
     if (name.includes("gray") || name.includes("grey")) return "#6b7280";
-    if (name.includes("green")) return "#16a34a";
+    if (name.includes("green"))  return "#16a34a";
     if (name.includes("yellow") || name.includes("gold")) return "#facc15";
     if (name.includes("orange")) return "#f97316";
-    if (name.includes("brown")) return "#7c4a31";
-    if (name.includes("beige")) return "#e5decf";
+    if (name.includes("brown"))  return "#7c4a31";
+    if (name.includes("beige"))  return "#e5decf";
     if (name.includes("purple")) return "#8b5cf6";
-    if (name.includes("pink")) return "#ec4899";
+    if (name.includes("pink"))   return "#ec4899";
     return "#e5e7eb";
   };
 
+  // ── Fuel meta helper ─────────────────────────────────────────────────────
+  // Returns the accent color for the fuel chip based on fuel category.
+  const getFuelColor = (fuelType) => {
+    if (!fuelType) return "#f59e0b"
+    const f = fuelType.toLowerCase()
+    if (f.includes("electric"))                         return "#3b82f6"  // blue
+    if (f.includes("hybrid") || f.includes("plug"))    return "#16a34a"  // green
+    if (f.includes("diesel"))                           return "#0ea5e9"  // sky
+    if (f.includes("cng") || f.includes("compressed")) return "#8b5cf6"  // purple
+    if (f.includes("lpg") || f.includes("liquefied"))  return "#f97316"  // orange
+    return "#f59e0b"                                                       // amber — gasoline
+  }
+
+  // ── Gas Pump SVG ─────────────────────────────────────────────────────────
+  // A proper petrol-station pump silhouette. strokeColor is injected per fuel type.
+  // Path anatomy:
+  //   • Tall rectangle = tank body with pump face
+  //   • Horizontal arm = nozzle arm extending right
+  //   • Small square at arm end = nozzle head
+  //   • Horizontal line inside tank = fuel-level indicator
+  const GasPumpSVG = ({ strokeColor }) => (
+    <svg
+      width="14" height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={strokeColor}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {/* Main pump body */}
+      <path d="M3 22V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16H3z" />
+      {/* Nozzle arm */}
+      <path d="M15 8h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3" />
+      {/* Nozzle tip cap */}
+      <rect x="19" y="10" width="2" height="3" rx="1" />
+      {/* Fuel level indicator inside body */}
+      <line x1="7" y1="14" x2="11" y2="14" />
+      {/* Pump door / panel */}
+      <rect x="5" y="7" width="8" height="5" rx="1" />
+    </svg>
+  )
+
   const isAvailable = colorStats.some(s => s.available > 0);
+  const fuelColor   = getFuelColor(car.fuel_type)
 
   return (
     <div
@@ -2292,32 +2323,21 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
       className={`relative w-full bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden cursor-pointer group animate-on-scroll animate-fade-up delay-${(index % 6) * 100} ${cardVisible ? 'visible' : ''}`}
       onClick={() => onOpenDetails(car)}
     >
-      {/* Hover glow effect */}
+      {/* Hover glow */}
       <div className="absolute -inset-0.5 bg-gradient-to-r from-gray-900 via-black to-gray-900 rounded-2xl opacity-0 group-hover:opacity-10 blur-xl transition-all duration-500"></div>
 
-      {/* Card content */}
       <div className="relative bg-white rounded-2xl overflow-hidden">
-        
-        {/* Image Section with More Height */}
+
+        {/* Image Section */}
         <div className="relative h-52 w-full overflow-hidden">
-          {/* Visible square pattern background - road/grid */}
           <div className="absolute inset-0">
-            <img
-              src={defaultBackground}
-              alt="Background"
-              className="w-full h-full object-cover opacity-100"
-            />
-            {/* Square grid overlay */}
+            <img src={defaultBackground} alt="Background" className="w-full h-full object-cover opacity-100" />
             <div className="absolute inset-0" style={{
-              backgroundImage: `
-                linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px)
-              `,
+              backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.03) 1px, transparent 1px),linear-gradient(to bottom, rgba(0,0,0,0.03) 1px, transparent 1px)`,
               backgroundSize: '20px 20px'
             }}></div>
           </div>
-          
-          {/* ZOOM ONLY - No rotation */}
+
           {car.image_url ? (
             <img
               src={car.image_url}
@@ -2336,7 +2356,7 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
             </div>
           )}
 
-          {/* Owner Badge - Top Left */}
+          {/* Owner Badge */}
           <div className="absolute top-3 left-3">
             {isRentalDen ? (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold shadow-lg backdrop-blur-sm bg-white text-black border border-gray-200">
@@ -2355,67 +2375,97 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
             )}
           </div>
 
-          {/* Availability Badge - Top Right */}
+          {/* Availability Badge */}
           {!isLoading && (
             <div className="absolute top-3 right-3">
-              <div className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg backdrop-blur-sm ${
-                isAvailable 
-                  ? 'bg-green-500/90 text-white' 
-                  : 'bg-gray-900/90 text-white'
-              }`}>
+              <div className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-lg backdrop-blur-sm ${isAvailable ? 'bg-green-500/90 text-white' : 'bg-gray-900/90 text-white'}`}>
                 {isAvailable ? 'Available' : 'Not Available'}
               </div>
             </div>
           )}
         </div>
 
-        {/* Compact Content Section */}
+        {/* Content Section */}
         <div className="p-5">
-          
+
           {/* Title */}
           <div className="mb-3">
             <h3 className="text-xl font-bold text-gray-900 truncate group-hover:text-black transition-colors">
               {car.model}
             </h3>
-            <p className="text-xs text-gray-500 font-medium">
-              {car.make} • {car.year}
-            </p>
+            <p className="text-xs text-gray-500 font-medium">{car.make} • {car.year}</p>
           </div>
 
-          {/* Compact Specs Row */}
-          <div className="flex items-center gap-3 mb-4">
+          {/* Specs Row */}
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
               <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors">
                 <IoSpeedometerOutline className="w-3.5 h-3.5" />
               </div>
-              <span className="font-medium">
-                {car.mileage ? `${Number(car.mileage).toLocaleString()}` : "N/A"}
-              </span>
+              <span className="font-medium">{car.mileage ? `${Number(car.mileage).toLocaleString()}` : "N/A"}</span>
             </div>
-            
+
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
               <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors">
                 <IoPeopleOutline className="w-3.5 h-3.5" />
               </div>
               <span className="font-medium">{car.seats}</span>
             </div>
-            
+
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
               <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors">
                 <IoCarOutline className="w-3.5 h-3.5" />
               </div>
               <span className="font-medium text-xs">{car.type}</span>
             </div>
+
+            {/* ── IMPROVED: Fuel Type chip with gas pump SVG ─────────── */}
+            {car.fuel_type && (
+              <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: fuelColor }}>
+                {/*
+                  Colored circle whose tint matches the fuel category:
+                    Gasoline  → amber  (#f59e0b)
+                    Electric  → blue   (#3b82f6)
+                    Hybrid    → green  (#16a34a)
+                    Diesel    → sky    (#0ea5e9)
+                    CNG       → purple (#8b5cf6)
+                    LPG       → orange (#f97316)
+                */}
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ backgroundColor: `${fuelColor}1a` }}   /* ~10% opacity tint */
+                >
+                  <GasPumpSVG strokeColor={fuelColor} />
+                </div>
+                <span>{car.fuel_type}</span>
+              </div>
+            )}
           </div>
 
-          {/* Price & Colors Combined Row */}
+          {/* Deposit Badge — unchanged from original */}
+          {car.deposit_amount && (
+            <div className="mb-4 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-[10px] font-semibold text-amber-900 leading-tight">
+                    ₱{Number(car.deposit_amount).toLocaleString()} Deposit
+                  </p>
+                  <p className="text-[9px] text-amber-700 leading-tight">Refundable</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Price & Colors Row */}
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-bold text-black">₱{car.price_per_day}</span>
               <span className="text-xs text-gray-500 font-medium">/day</span>
             </div>
-            
-            {/* Compact Color Indicators */}
+
             {isLoading ? (
               <div className="flex gap-1.5">
                 {[...Array(2)].map((_, i) => (
@@ -2425,27 +2475,13 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
             ) : colorStats.length > 0 ? (
               <div className="flex gap-1.5">
                 {colorStats.slice(0, 3).map((stat, idx) => (
-                  <div 
-                    key={idx} 
-                    className="relative group/color"
-                    title={`${stat.color} - ${stat.available} available`}
-                  >
-                    <div 
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 ${
-                        stat.available > 0 
-                          ? 'bg-gray-100 group-hover/color:scale-110' 
-                          : 'bg-gray-50 opacity-40'
-                      }`}
-                    >
+                  <div key={idx} className="relative group/color" title={`${stat.color} - ${stat.available} available`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 ${stat.available > 0 ? 'bg-gray-100 group-hover/color:scale-110' : 'bg-gray-50 opacity-40'}`}>
                       <div
                         className="w-4 h-4 rounded-full border shadow-sm"
-                        style={{
-                          backgroundColor: getColorHex(stat.color),
-                          borderColor: getColorHex(stat.color) === '#ffffff' ? '#e5e7eb' : getColorHex(stat.color)
-                        }}
+                        style={{ backgroundColor: getColorHex(stat.color), borderColor: getColorHex(stat.color) === '#ffffff' ? '#e5e7eb' : getColorHex(stat.color) }}
                       />
                     </div>
-                    
                     {stat.available > 0 && (
                       <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-black text-white text-[9px] rounded-full flex items-center justify-center font-bold border border-white">
                         {stat.available}
@@ -2462,13 +2498,10 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
             ) : null}
           </div>
 
-          {/* Compact Action Buttons */}
+          {/* Action Buttons */}
           <div className="flex gap-2">
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRentClick(car);
-              }}
+              onClick={(e) => { e.stopPropagation(); onRentClick(car) }}
               disabled={isLoading || !isAvailable}
               className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-sm transition-all duration-300 transform ${
                 isLoading || !isAvailable
@@ -2478,12 +2511,9 @@ const CarCard = ({ car, onRentClick, onOpenDetails, index }) => {
             >
               {isLoading ? 'Loading...' : !isAvailable ? 'Unavailable' : 'Rent Now'}
             </button>
-            
+
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenDetails?.(car);
-              }}
+              onClick={(e) => { e.stopPropagation(); onOpenDetails?.(car) }}
               className="flex-1 py-2.5 px-3 border-2 border-gray-200 text-sm rounded-xl font-bold hover:border-black hover:bg-gray-50 transition-all duration-300 transform hover:scale-105"
             >
               Details
