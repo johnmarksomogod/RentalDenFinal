@@ -11,6 +11,7 @@ const PORT = process.env.PORT || 80;
 app.use(cors());
 app.use(express.json());
 
+// ─── Transporter ──────────────────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -42,6 +43,12 @@ const fmtDateTime = (d) =>
         hour: "2-digit",
         minute: "2-digit",
       });
+
+// Safe string — prevents undefined/null from leaking into HTML
+const safe = (v, fallback = "—") =>
+  v !== null && v !== undefined && String(v).trim() !== ""
+    ? String(v)
+    : fallback;
 
 // ─── Status metadata ──────────────────────────────────────────────────────────
 const STATUS_META = {
@@ -163,8 +170,6 @@ const BASE_STYLES = `
   .driver-avatar { width: 46px; height: 46px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800; color: #374151; flex-shrink: 0; }
   .driver-name { font-size: 15px; font-weight: 700; color: #111827; }
   .driver-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
-  .charges-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
-  .charge-pill { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; }
   .footer { background: #111827; padding: 24px 32px; text-align: center; }
   .footer p { color: #6b7280; font-size: 12px; line-height: 1.8; }
   .footer a { color: #9ca3af; }
@@ -176,12 +181,12 @@ const BASE_STYLES = `
   .decline-box p { font-size: 13px; color: #7f1d1d; line-height: 1.6; }
 `;
 
-// ─── Reusable HTML fragments ──────────────────────────────────────────────────
+// ─── HTML fragment builders ───────────────────────────────────────────────────
 
 const emailHeader = (meta) => `
 <!DOCTYPE html><html lang="en"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${meta.title} – The Rental Den</title>
+  <title>${safe(meta.title)} – The Rental Den</title>
   <style>${BASE_STYLES}</style>
 </head><body>
 <div class="wrapper"><div class="card">
@@ -203,7 +208,7 @@ const emailFooter = () => `
       📞 <strong>+63 900 000 0000</strong> &nbsp;|&nbsp; ✉️ <strong>hello@rentalden.com</strong><br>
       📍 Cebu City, Philippines</p>
     </div>
-  </div><!-- /body -->
+  </div>
   <div class="footer">
     <p>© ${new Date().getFullYear()} The Rental Den · Cebu City, Philippines<br>
     You're receiving this because you have an active booking with us.</p>
@@ -216,19 +221,19 @@ const bookingDetailsSection = (b) => {
   return `
   <div class="section">
     <div class="section-title">📋 Booking Details</div>
-    <div class="row"><span class="row-label">Booking ID</span><span class="row-value">#${b.bookingId || b.id || "—"}</span></div>
-    <div class="row"><span class="row-label">Customer</span><span class="row-value">${b.customer_name || "—"}</span></div>
-    ${b.customer_phone ? `<div class="row"><span class="row-label">Phone</span><span class="row-value">${b.customer_phone}</span></div>` : ""}
-    ${b.license_number ? `<div class="row"><span class="row-label">License No.</span><span class="row-value">${b.license_number}</span></div>` : ""}
+    <div class="row"><span class="row-label">Booking ID</span><span class="row-value">#${safe(b.bookingId || b.id)}</span></div>
+    <div class="row"><span class="row-label">Customer</span><span class="row-value">${safe(b.customer_name)}</span></div>
+    ${b.customer_phone ? `<div class="row"><span class="row-label">Phone</span><span class="row-value">${safe(b.customer_phone)}</span></div>` : ""}
+    ${b.license_number ? `<div class="row"><span class="row-label">License No.</span><span class="row-value">${safe(b.license_number)}</span></div>` : ""}
     <div class="row"><span class="row-label">Vehicle</span><span class="row-value">${vehicleLine || "—"}</span></div>
-    ${b.variantColor ? `<div class="row"><span class="row-label">Color</span><span class="row-value">${b.variantColor}</span></div>` : ""}
-    ${b.plate_number ? `<div class="row"><span class="row-label">Plate No.</span><span class="row-value">${b.plate_number}</span></div>` : ""}
-    ${b.fuel_type ? `<div class="row"><span class="row-label">Fuel Type</span><span class="row-value">${b.fuel_type}</span></div>` : ""}
+    ${b.variantColor ? `<div class="row"><span class="row-label">Color</span><span class="row-value">${safe(b.variantColor)}</span></div>` : ""}
+    ${b.plate_number ? `<div class="row"><span class="row-label">Plate No.</span><span class="row-value">${safe(b.plate_number)}</span></div>` : ""}
+    ${b.fuel_type ? `<div class="row"><span class="row-label">Fuel Type</span><span class="row-value">${safe(b.fuel_type)}</span></div>` : ""}
     <div class="row"><span class="row-label">Rental Start</span><span class="row-value">${fmtDate(b.rental_start_date)}</span></div>
     <div class="row"><span class="row-label">Rental End</span><span class="row-value">${fmtDate(b.rental_end_date)}</span></div>
-    ${b.pickup_location ? `<div class="row"><span class="row-label">Pickup Location</span><span class="row-value">${b.pickup_location}</span></div>` : ""}
-    ${b.delivery_address ? `<div class="row"><span class="row-label">Delivery Address</span><span class="row-value">${b.delivery_address}</span></div>` : ""}
-    ${b.delivery_option ? `<div class="row"><span class="row-label">Service Type</span><span class="row-value" style="text-transform:capitalize">${b.delivery_option === "deliver" ? "🚚 Delivery" : "🏢 Self-Pickup"}</span></div>` : ""}
+    ${b.pickup_location ? `<div class="row"><span class="row-label">Pickup Location</span><span class="row-value">${safe(b.pickup_location)}</span></div>` : ""}
+    ${b.delivery_address ? `<div class="row"><span class="row-label">Delivery Address</span><span class="row-value">${safe(b.delivery_address)}</span></div>` : ""}
+    ${b.delivery_option ? `<div class="row"><span class="row-label">Service Type</span><span class="row-value">${b.delivery_option === "deliver" ? "🚚 Delivery" : "🏢 Self-Pickup"}</span></div>` : ""}
     <div class="row"><span class="row-label">Total Rental Fee</span><span class="row-value" style="color:#059669;font-size:15px">${fmt(b.total_price)}</span></div>
   </div>`;
 };
@@ -266,20 +271,20 @@ const driverSection = (b) => {
   <div class="driver-box">
     <div class="driver-avatar">${initials}</div>
     <div>
-      <div class="driver-name">🧑‍✈️ ${b.assigned_driver}</div>
+      <div class="driver-name">🧑‍✈️ ${safe(b.assigned_driver)}</div>
       <div class="driver-sub">Your assigned driver for this booking</div>
-      ${b.assigned_driver_email ? `<div class="driver-sub">✉️ ${b.assigned_driver_email}</div>` : ""}
+      ${b.assigned_driver_email ? `<div class="driver-sub">✉️ ${safe(b.assigned_driver_email)}</div>` : ""}
     </div>
   </div>`;
 };
 
 const paymentLogSection = (b, showTitle = "💳 Payment Log") => {
-  const log = b.payment_log || [];
+  const log = Array.isArray(b.payment_log) ? b.payment_log : [];
   if (!log.length) return "";
   const total = log.reduce((s, e) => s + parseFloat(e.amount || 0), 0);
   const rows = log.map((e) => `
     <tr>
-      <td>${e.event || "Payment"}</td>
+      <td>${safe(e.event, "Payment")}</td>
       <td style="color:#6b7280;font-size:12px">${fmtDateTime(e.recorded_at)}</td>
       <td class="amount">${fmt(e.amount)}</td>
     </tr>`).join("");
@@ -288,7 +293,7 @@ const paymentLogSection = (b, showTitle = "💳 Payment Log") => {
     <div class="section-title">${showTitle}</div>
     <table class="pay-table">
       <thead><tr>
-        <th>Description</th><th>Date & Time</th><th style="text-align:right">Amount</th>
+        <th>Description</th><th>Date &amp; Time</th><th style="text-align:right">Amount</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -324,7 +329,7 @@ const paymentSummarySection = (b) => {
   const damage = parseFloat(b.damage_fee || 0);
   const deposit = parseFloat(b.deposit_amount || 0);
   const depositReturned = !!b.deposit_returned;
-  const paid = (b.payment_log || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+  const paid = (Array.isArray(b.payment_log) ? b.payment_log : []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
   const totalOwed = base + fuel + delay + damage;
 
   return `
@@ -350,210 +355,180 @@ const paymentSummarySection = (b) => {
   </div>`;
 };
 
-const reviewSection = (b) => `
+const reviewSection = (b) => {
+  const id = safe(b.bookingId || b.id);
+  return `
   <div class="review-box">
     <div class="stars">⭐⭐⭐⭐⭐</div>
     <h3>How was your experience?</h3>
     <p>Your feedback helps us improve and serve you better. It only takes 30 seconds!</p>
-    <a class="review-btn" href="mailto:hello@rentalden.com?subject=Review%20for%20Booking%20%23${b.bookingId || b.id}&body=Booking%20ID%3A%20%23${b.bookingId || b.id}%0A%0ARating%20(1-5%20stars)%3A%20%0A%0AYour%20review%3A%20">
+    <a class="review-btn" href="mailto:hello@rentalden.com?subject=Review%20for%20Booking%20%23${id}&body=Booking%20ID%3A%20%23${id}%0A%0ARating%20(1-5%20stars)%3A%20%0A%0AYour%20review%3A%20">
       ✍️ Write Your Review
     </a>
-    <p style="color:#6b7280;font-size:12px;margin-top:12px">Or email us at hello@rentalden.com with subject: Review #${b.bookingId || b.id}</p>
+    <p style="color:#6b7280;font-size:12px;margin-top:12px">Or email us at hello@rentalden.com with subject: Review #${id}</p>
   </div>`;
+};
 
 // ─── Email builders per status ────────────────────────────────────────────────
 
-const buildPendingEmail = (b) => {
-  const meta = STATUS_META.pending;
-  return (
-    emailHeader(meta) +
-    bookingDetailsSection(b) +
-    depositSection(b) +
-    `<div class="highlight-box" style="background:#fffbeb;border:1px solid #fde68a">
-      <h4 style="color:#92400e;margin-bottom:8px">📌 While you wait – Good to know:</h4>
-      <ul style="color:#78350f">
-        <li>Balance must be settled before you can use the car</li>
-        <li>Fuel must be returned at the same level as pickup</li>
-        <li>Extended hours are charged at ₱300/hour</li>
-        <li>Delivery within 5km from our garage: ₱250</li>
-        <li>Please ensure your ID and driver's license are ready</li>
-      </ul>
-    </div>` +
-    emailFooter()
-  );
-};
+const buildPendingEmail = (b) =>
+  emailHeader(STATUS_META.pending) +
+  bookingDetailsSection(b) +
+  depositSection(b) +
+  `<div class="highlight-box" style="background:#fffbeb;border:1px solid #fde68a">
+    <h4 style="color:#92400e;margin-bottom:8px">📌 While you wait – Good to know:</h4>
+    <ul style="color:#78350f">
+      <li>Balance must be settled before you can use the car</li>
+      <li>Fuel must be returned at the same level as pickup</li>
+      <li>Extended hours are charged at ₱300/hour</li>
+      <li>Delivery within 5km from our garage: ₱250</li>
+      <li>Please ensure your ID and driver's license are ready</li>
+    </ul>
+  </div>` +
+  emailFooter();
 
-const buildConfirmedEmail = (b) => {
-  const meta = STATUS_META.confirmed;
-  return (
-    emailHeader(meta) +
-    bookingDetailsSection(b) +
-    driverSection(b) +
-    depositSection(b) +
-    `<div class="highlight-box" style="background:#eff6ff;border:1px solid #bfdbfe">
-      <h4 style="color:#1e40af;margin-bottom:8px">🚀 Next Steps – Please Prepare:</h4>
-      <ul style="color:#1e3a8a">
-        <li>Arrive / be available 15 minutes before your scheduled time</li>
-        <li>Bring your valid driver's license and government-issued ID</li>
-        <li>Settle remaining balance before vehicle use</li>
-        <li>Prepare security deposit: <strong>${fmt(b.deposit_amount || 0)}</strong></li>
-        <li>Our team will contact you 24 hours before delivery</li>
-        <li>Vehicle inspection will be done before handover</li>
-      </ul>
-    </div>` +
-    `<div class="highlight-box" style="background:#f0fdf4;border:1px solid #86efac;margin-top:0">
-      <h4 style="color:#166534;margin-bottom:8px">📋 Important Rental Guidelines:</h4>
-      <ul style="color:#14532d">
-        <li><strong>Fuel:</strong> Return vehicle with same fuel level as pickup</li>
-        <li><strong>Extended Hours:</strong> ₱300 per hour beyond agreed return time</li>
-        <li><strong>Delivery:</strong> Within 5km from our garage for ₱250</li>
-        <li><strong>Payment:</strong> Balance settled before vehicle use</li>
-      </ul>
-    </div>` +
-    emailFooter()
-  );
-};
+const buildConfirmedEmail = (b) =>
+  emailHeader(STATUS_META.confirmed) +
+  bookingDetailsSection(b) +
+  driverSection(b) +
+  depositSection(b) +
+  `<div class="highlight-box" style="background:#eff6ff;border:1px solid #bfdbfe">
+    <h4 style="color:#1e40af;margin-bottom:8px">🚀 Next Steps – Please Prepare:</h4>
+    <ul style="color:#1e3a8a">
+      <li>Arrive / be available 15 minutes before your scheduled time</li>
+      <li>Bring your valid driver's license and government-issued ID</li>
+      <li>Settle remaining balance before vehicle use</li>
+      <li>Prepare security deposit: <strong>${fmt(b.deposit_amount || 0)}</strong></li>
+      <li>Our team will contact you 24 hours before delivery</li>
+      <li>Vehicle inspection will be done before handover</li>
+    </ul>
+  </div>
+  <div class="highlight-box" style="background:#f0fdf4;border:1px solid #86efac;margin-top:0">
+    <h4 style="color:#166534;margin-bottom:8px">📋 Important Rental Guidelines:</h4>
+    <ul style="color:#14532d">
+      <li><strong>Fuel:</strong> Return vehicle with same fuel level as pickup</li>
+      <li><strong>Extended Hours:</strong> ₱300 per hour beyond agreed return time</li>
+      <li><strong>Delivery:</strong> Within 5km from our garage for ₱250</li>
+      <li><strong>Payment:</strong> Balance settled before vehicle use</li>
+    </ul>
+  </div>` +
+  emailFooter();
 
-const buildOngoingEmail = (b) => {
-  const meta = STATUS_META.ongoing;
-  return (
-    emailHeader(meta) +
-    bookingDetailsSection(b) +
-    driverSection(b) +
-    depositSection(b) +
-    `<div class="highlight-box" style="background:#f5f3ff;border:1px solid #ddd6fe">
-      <h4 style="color:#5b21b6;margin-bottom:8px">🚗 Driver is on the way – Please Prepare:</h4>
-      <ul style="color:#4c1d95">
-        <li>Be at your delivery address and ready to receive the vehicle</li>
-        <li>Have your valid ID and driver's license ready for verification</li>
-        <li>Prepare your <strong>balance payment</strong> and <strong>security deposit ${fmt(b.deposit_amount || 0)}</strong></li>
-        <li>A vehicle inspection will be done upon delivery – please be present</li>
-        ${b.partial_payment_amount ? `<li>Partial payment of <strong>${fmt(b.partial_payment_amount)}</strong> acknowledged</li>` : ""}
-      </ul>
-    </div>` +
-    (b.partial_payment_amount
-      ? `<div class="section">
-          <div class="section-title">💰 Payment Status</div>
-          <div class="row"><span class="row-label">Total Rental Fee</span><span class="row-value">${fmt(b.total_price)}</span></div>
-          <div class="row"><span class="row-label">Partial Payment Received</span><span class="row-value" style="color:#059669">${fmt(b.partial_payment_amount)}</span></div>
-          <div class="row"><span class="row-label">Remaining Balance</span><span class="row-value" style="color:#b91c1c;font-size:15px">${fmt(parseFloat(b.total_price || 0) - parseFloat(b.partial_payment_amount || 0))}</span></div>
-        </div>`
-      : "") +
-    emailFooter()
-  );
-};
+const buildOngoingEmail = (b) =>
+  emailHeader(STATUS_META.ongoing) +
+  bookingDetailsSection(b) +
+  driverSection(b) +
+  depositSection(b) +
+  `<div class="highlight-box" style="background:#f5f3ff;border:1px solid #ddd6fe">
+    <h4 style="color:#5b21b6;margin-bottom:8px">🚗 Driver is on the way – Please Prepare:</h4>
+    <ul style="color:#4c1d95">
+      <li>Be at your delivery address and ready to receive the vehicle</li>
+      <li>Have your valid ID and driver's license ready for verification</li>
+      <li>Prepare your <strong>balance payment</strong> and <strong>security deposit ${fmt(b.deposit_amount || 0)}</strong></li>
+      <li>A vehicle inspection will be done upon delivery – please be present</li>
+      ${b.partial_payment_amount ? `<li>Partial payment of <strong>${fmt(b.partial_payment_amount)}</strong> acknowledged</li>` : ""}
+    </ul>
+  </div>` +
+  (b.partial_payment_amount
+    ? `<div class="section">
+        <div class="section-title">💰 Payment Status</div>
+        <div class="row"><span class="row-label">Total Rental Fee</span><span class="row-value">${fmt(b.total_price)}</span></div>
+        <div class="row"><span class="row-label">Partial Payment Received</span><span class="row-value" style="color:#059669">${fmt(b.partial_payment_amount)}</span></div>
+        <div class="row"><span class="row-label">Remaining Balance</span><span class="row-value" style="color:#b91c1c;font-size:15px">${fmt(parseFloat(b.total_price || 0) - parseFloat(b.partial_payment_amount || 0))}</span></div>
+      </div>`
+    : "") +
+  emailFooter();
 
-const buildDeliveredEmail = (b) => {
-  const meta = STATUS_META.delivered;
-  const totalPaid = (b.payment_log || []).reduce((s, e) => s + parseFloat(e.amount || 0), 0);
-  return (
-    emailHeader(meta) +
-    bookingDetailsSection(b) +
-    driverSection(b) +
-    paymentLogSection(b, "💳 Payment Collected at Delivery") +
-    depositSection(b) +
-    extraChargesSection(b) +
-    `<div class="highlight-box" style="background:#fdf2f8;border:1px solid #f9a8d4">
-      <h4 style="color:#9d174d;margin-bottom:8px">🌟 Enjoy Your Rental!</h4>
-      <ul style="color:#831843">
-        <li>Drive safely and responsibly</li>
-        <li>Return the vehicle with the same fuel level as when received</li>
-        <li>Contact us immediately for any issues: <strong>+63 900 000 0000</strong></li>
-        <li>Extended hours: ₱300/hour after agreed return time</li>
-        <li>Security deposit of <strong>${fmt(b.deposit_amount || 0)}</strong> will be returned upon vehicle retrieval</li>
-      </ul>
-    </div>` +
-    emailFooter()
-  );
-};
+const buildDeliveredEmail = (b) =>
+  emailHeader(STATUS_META.delivered) +
+  bookingDetailsSection(b) +
+  driverSection(b) +
+  paymentLogSection(b, "💳 Payment Collected at Delivery") +
+  depositSection(b) +
+  extraChargesSection(b) +
+  `<div class="highlight-box" style="background:#fdf2f8;border:1px solid #f9a8d4">
+    <h4 style="color:#9d174d;margin-bottom:8px">🌟 Enjoy Your Rental!</h4>
+    <ul style="color:#831843">
+      <li>Drive safely and responsibly</li>
+      <li>Return the vehicle with the same fuel level as when received</li>
+      <li>Contact us immediately for any issues: <strong>+63 900 000 0000</strong></li>
+      <li>Extended hours: ₱300/hour after agreed return time</li>
+      <li>Security deposit of <strong>${fmt(b.deposit_amount || 0)}</strong> will be returned upon vehicle retrieval</li>
+    </ul>
+  </div>` +
+  emailFooter();
 
-const buildRetrievedEmail = (b) => {
-  const meta = STATUS_META.retrieved;
-  return (
-    emailHeader(meta) +
-    bookingDetailsSection(b) +
-    driverSection(b) +
-    paymentSummarySection(b) +
-    paymentLogSection(b, "📜 Complete Payment History") +
-    depositSection(b) +
-    `<div class="highlight-box" style="background:#ecfeff;border:1px solid #a5f3fc">
-      <h4 style="color:#164e63;margin-bottom:8px">🔁 Vehicle Retrieved Successfully!</h4>
-      <ul style="color:#155e75">
-        <li>Vehicle has been inspected upon retrieval</li>
-        <li>Any additional charges have been applied above</li>
-        <li>Security deposit status is reflected above</li>
-        <li>Booking will be marked as completed once fully processed</li>
-      </ul>
-    </div>` +
-    reviewSection(b) +
-    emailFooter()
-  );
-};
+const buildRetrievedEmail = (b) =>
+  emailHeader(STATUS_META.retrieved) +
+  bookingDetailsSection(b) +
+  driverSection(b) +
+  paymentSummarySection(b) +
+  paymentLogSection(b, "📜 Complete Payment History") +
+  depositSection(b) +
+  `<div class="highlight-box" style="background:#ecfeff;border:1px solid #a5f3fc">
+    <h4 style="color:#164e63;margin-bottom:8px">🔁 Vehicle Retrieved Successfully!</h4>
+    <ul style="color:#155e75">
+      <li>Vehicle has been inspected upon retrieval</li>
+      <li>Any additional charges have been applied above</li>
+      <li>Security deposit status is reflected above</li>
+      <li>Booking will be marked as completed once fully processed</li>
+    </ul>
+  </div>` +
+  reviewSection(b) +
+  emailFooter();
 
-const buildCompletedEmail = (b) => {
-  const meta = STATUS_META.completed;
-  return (
-    emailHeader(meta) +
-    bookingDetailsSection(b) +
-    paymentSummarySection(b) +
-    paymentLogSection(b, "📜 Full Payment History") +
-    depositSection(b) +
-    `<div class="highlight-box" style="background:#f0fdf4;border:1px solid #86efac">
-      <h4 style="color:#166534;margin-bottom:8px">🏆 Booking Fully Completed!</h4>
-      <ul style="color:#14532d">
-        <li>All payments have been settled</li>
-        ${b.deposit_returned ? "<li>Security deposit has been returned ✅</li>" : ""}
-        <li>We hope you had a wonderful experience</li>
-        <li>We look forward to serving you again!</li>
-      </ul>
-    </div>` +
-    reviewSection(b) +
-    emailFooter()
-  );
-};
+const buildCompletedEmail = (b) =>
+  emailHeader(STATUS_META.completed) +
+  bookingDetailsSection(b) +
+  paymentSummarySection(b) +
+  paymentLogSection(b, "📜 Full Payment History") +
+  depositSection(b) +
+  `<div class="highlight-box" style="background:#f0fdf4;border:1px solid #86efac">
+    <h4 style="color:#166534;margin-bottom:8px">🏆 Booking Fully Completed!</h4>
+    <ul style="color:#14532d">
+      <li>All payments have been settled</li>
+      ${b.deposit_returned ? "<li>Security deposit has been returned ✅</li>" : ""}
+      <li>We hope you had a wonderful experience</li>
+      <li>We look forward to serving you again!</li>
+    </ul>
+  </div>` +
+  reviewSection(b) +
+  emailFooter();
 
-const buildCancelledEmail = (b) => {
-  const meta = STATUS_META.cancelled;
-  return (
-    emailHeader(meta) +
-    bookingDetailsSection(b) +
-    `<div class="highlight-box" style="background:#fef2f2;border:1px solid #fecaca">
-      <h4 style="color:#b91c1c;margin-bottom:8px">🚫 Cancellation Information:</h4>
-      <ul style="color:#7f1d1d">
-        <li>Your booking has been successfully cancelled</li>
-        <li>Refund processing will begin within 3–5 business days (if applicable)</li>
-        <li>You will receive a separate email regarding refund status</li>
-        <li>Feel free to book again anytime!</li>
-      </ul>
-    </div>` +
-    emailFooter()
-  );
-};
+const buildCancelledEmail = (b) =>
+  emailHeader(STATUS_META.cancelled) +
+  bookingDetailsSection(b) +
+  `<div class="highlight-box" style="background:#fef2f2;border:1px solid #fecaca">
+    <h4 style="color:#b91c1c;margin-bottom:8px">🚫 Cancellation Information:</h4>
+    <ul style="color:#7f1d1d">
+      <li>Your booking has been successfully cancelled</li>
+      <li>Refund processing will begin within 3–5 business days (if applicable)</li>
+      <li>You will receive a separate email regarding refund status</li>
+      <li>Feel free to book again anytime!</li>
+    </ul>
+  </div>` +
+  emailFooter();
 
-const buildDeclinedEmail = (b) => {
-  const meta = STATUS_META.declined;
-  return (
-    emailHeader(meta) +
-    bookingDetailsSection(b) +
-    (b.decline_reason
-      ? `<div class="decline-box">
-          <h4>Reason for Decline:</h4>
-          <p>${b.decline_reason}</p>
-          <p style="margin-top:8px;font-style:italic">We apologize for the inconvenience. Please feel free to contact us to discuss alternative options.</p>
-        </div>`
-      : "") +
-    `<div class="highlight-box" style="background:#fff7ed;border:1px solid #fed7aa">
-      <h4 style="color:#92400e;margin-bottom:8px">📌 What happens next:</h4>
-      <ul style="color:#78350f">
-        <li>No charges will be applied to your account</li>
-        <li>You're welcome to submit a new booking request</li>
-        <li>Contact us to discuss alternative vehicle options</li>
-        <li>We appreciate your understanding</li>
-      </ul>
-    </div>` +
-    emailFooter()
-  );
-};
+const buildDeclinedEmail = (b) =>
+  emailHeader(STATUS_META.declined) +
+  bookingDetailsSection(b) +
+  (b.decline_reason
+    ? `<div class="decline-box">
+        <h4>Reason for Decline:</h4>
+        <p>${safe(b.decline_reason)}</p>
+        <p style="margin-top:8px;font-style:italic">We apologize for the inconvenience. Please feel free to contact us to discuss alternative options.</p>
+      </div>`
+    : "") +
+  `<div class="highlight-box" style="background:#fff7ed;border:1px solid #fed7aa">
+    <h4 style="color:#92400e;margin-bottom:8px">📌 What happens next:</h4>
+    <ul style="color:#78350f">
+      <li>No charges will be applied to your account</li>
+      <li>You're welcome to submit a new booking request</li>
+      <li>Contact us to discuss alternative vehicle options</li>
+      <li>We appreciate your understanding</li>
+    </ul>
+  </div>` +
+  emailFooter();
 
 // ─── Build email by status ────────────────────────────────────────────────────
 const buildEmail = (b) => {
@@ -567,17 +542,13 @@ const buildEmail = (b) => {
     case "cancelled": return buildCancelledEmail(b);
     case "declined":  return buildDeclinedEmail(b);
     default:
-      return (
-        emailHeader(STATUS_META.pending) +
-        bookingDetailsSection(b) +
-        emailFooter()
-      );
+      return emailHeader(STATUS_META.pending) + bookingDetailsSection(b) + emailFooter();
   }
 };
 
 // ─── Email subjects ───────────────────────────────────────────────────────────
 const getSubject = (b) => {
-  const id = b.bookingId || b.id || "";
+  const id = safe(b.bookingId || b.id, "N/A");
   const subjects = {
     pending:   `⏳ Booking Received – Under Review (#${id})`,
     confirmed: `✅ Booking Confirmed – Vehicle Reserved (#${id})`,
@@ -593,10 +564,10 @@ const getSubject = (b) => {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-// Main status update email
 app.post("/api/send-status-email", async (req, res) => {
   try {
     const b = req.body;
+    console.log(`[email-server] Sending "${b.newStatus}" email → ${b.customer_email}`);
 
     if (!b.customer_email || !b.customer_name || !b.newStatus) {
       return res.status(400).json({ error: "Missing required fields: customer_email, customer_name, newStatus" });
@@ -612,14 +583,14 @@ app.post("/api/send-status-email", async (req, res) => {
       html: buildEmail(b),
     });
 
+    console.log(`[email-server] ✅ Sent to ${b.customer_email}`);
     res.status(200).json({ success: true, message: `Status email sent for status: ${b.newStatus}` });
   } catch (err) {
-    console.error("Email error:", err);
+    console.error("[email-server] ❌ Error:", err.message);
     res.status(500).json({ success: false, error: "Failed to send email", details: err.message });
   }
 });
 
-// Driver assigned notification (separate trigger if needed)
 app.post("/api/send-driver-assigned-email", async (req, res) => {
   try {
     const b = req.body;
@@ -627,18 +598,22 @@ app.post("/api/send-driver-assigned-email", async (req, res) => {
       return res.status(400).json({ error: "Missing customer_email or assigned_driver" });
     }
 
-    const vehicleLine = [b.vehicleYear, b.vehicleMake, b.vehicleModel].filter(Boolean).join(" ");
     const initials = b.assigned_driver.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
     const html =
-      emailHeader({ ...STATUS_META.confirmed, title: "Driver Assigned", headline: "Your driver has been assigned!", message: "A driver has been assigned to handle your vehicle delivery. See the details below." }) +
+      emailHeader({
+        ...STATUS_META.confirmed,
+        title:    "Driver Assigned",
+        headline: "Your driver has been assigned!",
+        message:  "A driver has been assigned to handle your vehicle delivery. See the details below.",
+      }) +
       bookingDetailsSection(b) +
       `<div class="driver-box">
         <div class="driver-avatar">${initials}</div>
         <div>
-          <div class="driver-name">🧑‍✈️ ${b.assigned_driver}</div>
-          <div class="driver-sub">Assigned driver for Booking #${b.bookingId || b.id}</div>
-          ${b.assigned_driver_email ? `<div class="driver-sub">✉️ ${b.assigned_driver_email}</div>` : ""}
+          <div class="driver-name">🧑‍✈️ ${safe(b.assigned_driver)}</div>
+          <div class="driver-sub">Assigned driver for Booking #${safe(b.bookingId || b.id)}</div>
+          ${b.assigned_driver_email ? `<div class="driver-sub">✉️ ${safe(b.assigned_driver_email)}</div>` : ""}
         </div>
       </div>` +
       depositSection(b) +
@@ -655,22 +630,23 @@ app.post("/api/send-driver-assigned-email", async (req, res) => {
     await transporter.sendMail({
       from: `"The Rental Den" <${process.env.EMAIL_USER}>`,
       to: b.customer_email,
-      subject: `🧑‍✈️ Driver Assigned – Booking #${b.bookingId || b.id}`,
+      subject: `🧑‍✈️ Driver Assigned – Booking #${safe(b.bookingId || b.id)}`,
       html,
     });
 
+    console.log(`[email-server] ✅ Driver-assigned email sent to ${b.customer_email}`);
     res.status(200).json({ success: true, message: "Driver assignment email sent" });
   } catch (err) {
-    console.error("Email error:", err);
+    console.error("[email-server] ❌ Error:", err.message);
     res.status(500).json({ success: false, error: "Failed to send email", details: err.message });
   }
 });
 
-// Health check
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "Email service is running", timestamp: new Date().toISOString() });
+  res.json({ status: "✅ Email service is running", timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Email service running on port ${PORT}`);
+  console.log(`[email-server] 🚀 Running on port ${PORT}`);
+  console.log(`[email-server] 📧 Account: ${process.env.EMAIL_USER}`);
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View, Text, FlatList, StyleSheet, ActivityIndicator, Alert,
   TouchableOpacity, Modal, TextInput, ScrollView, Dimensions,
@@ -17,7 +17,7 @@ import EmailService from '../services/emailService';
 
 const { width } = Dimensions.get('window');
 
-// ─── Fuel helpers (mirrors SystemSettingsScreen) ──────────────────────────────
+// ─── Fuel helpers ─────────────────────────────────────────────────────────────
 const FUEL_CATEGORY_META = {
   gasoline:      { label: "Gasoline",      icon: "flame-outline",  color: "#f59e0b", bg: "#fef3c7" },
   diesel:        { label: "Diesel",         icon: "water-outline",  color: "#0ea5e9", bg: "#e0f2fe" },
@@ -31,12 +31,12 @@ const FUEL_CATEGORY_META = {
 const getFuelMeta = (fuelTypeString) => {
   if (!fuelTypeString) return FUEL_CATEGORY_META.gasoline;
   const f = fuelTypeString.toLowerCase();
-  if (f.includes("electric"))                          return FUEL_CATEGORY_META.electric;
-  if (f.includes("plug"))                              return FUEL_CATEGORY_META.plugin_hybrid;
-  if (f.includes("hybrid"))                            return FUEL_CATEGORY_META.hybrid;
-  if (f.includes("diesel"))                            return FUEL_CATEGORY_META.diesel;
-  if (f.includes("cng") || f.includes("compressed"))  return FUEL_CATEGORY_META.cng;
-  if (f.includes("lpg") || f.includes("liquefied"))   return FUEL_CATEGORY_META.lpg;
+  if (f.includes("electric"))                         return FUEL_CATEGORY_META.electric;
+  if (f.includes("plug"))                             return FUEL_CATEGORY_META.plugin_hybrid;
+  if (f.includes("hybrid"))                           return FUEL_CATEGORY_META.hybrid;
+  if (f.includes("diesel"))                           return FUEL_CATEGORY_META.diesel;
+  if (f.includes("cng") || f.includes("compressed")) return FUEL_CATEGORY_META.cng;
+  if (f.includes("lpg") || f.includes("liquefied"))  return FUEL_CATEGORY_META.lpg;
   return FUEL_CATEGORY_META.gasoline;
 };
 
@@ -69,8 +69,21 @@ const STATUS_FLOW = {
 const ALL_STATUSES = ['pending', 'confirmed', 'ongoing', 'delivered', 'retrieved', 'completed', 'cancelled', 'declined'];
 const INVENTORY_RESERVED_STATUSES = ['confirmed', 'ongoing', 'delivered', 'retrieved'];
 
-// ─── Driver Status Timeline ────────────────────────────────────────────────────
-const DriverStatusTimeline = ({ booking }) => {
+// ─── Pure helpers (outside component so never re-created) ─────────────────────
+const isDeliveryBooking = (b) =>
+  b.delivery_option === 'deliver' ||
+  (b.delivery_address && b.delivery_address.trim().length > 0);
+
+const computeInventoryAdjustment = (oldStatus, newStatus) => {
+  const terminals = ['completed', 'cancelled', 'declined', 'pending'];
+  const wasActive = INVENTORY_RESERVED_STATUSES.includes(oldStatus);
+  if (!wasActive && newStatus === 'confirmed') return -1;
+  if (wasActive && terminals.includes(newStatus)) return +1;
+  return 0;
+};
+
+// ─── Driver Status Timeline (memoized) ───────────────────────────────────────
+const DriverStatusTimeline = memo(({ booking }) => {
   const steps = [
     { key: 'confirmed', label: 'Confirmed', icon: 'checkmark-circle' },
     { key: 'ongoing',   label: 'Ongoing',   icon: 'car'              },
@@ -144,35 +157,35 @@ const DriverStatusTimeline = ({ booking }) => {
       )}
     </View>
   );
-};
+});
 
 const tlS = StyleSheet.create({
-  container:  { backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, marginTop: 10, borderWidth: 1, borderColor: '#e2e8f0' },
-  title:      { fontSize: 11, fontWeight: '700', color: '#374151', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  row:        { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
-  stepCol:    { flex: 1, alignItems: 'center', position: 'relative' },
-  line:       { position: 'absolute', left: '-50%', right: '50%', top: 11, height: 2, backgroundColor: '#e5e7eb', zIndex: 0 },
-  lineDone:   { backgroundColor: '#111827' },
-  dot:        { width: 24, height: 24, borderRadius: 12, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center', zIndex: 1, marginBottom: 3 },
-  dotDone:    { backgroundColor: '#111827' },
-  dotCurrent: { backgroundColor: '#111827', shadowColor: '#111827', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 5, elevation: 4 },
-  label:      { fontSize: 8, color: '#9ca3af', textAlign: 'center', fontWeight: '500' },
-  labelDone:  { color: '#374151' },
-  labelCurrent:  { color: '#111827', fontWeight: '700' },
-  driverBadge:   { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start', marginTop: 6 },
-  driverText:    { fontSize: 12, color: '#111827', fontWeight: '600' },
-  pills:         { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
-  pill:          { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
-  pillTxt:       { fontSize: 11, fontWeight: '600' },
-  paySection:    { marginTop: 10, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8 },
-  payTitle:      { fontSize: 10, fontWeight: '700', color: '#374151', marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 },
-  payRow:        { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
-  payEvent:      { fontSize: 12, color: '#1f2937', fontWeight: '500' },
-  payTime:       { fontSize: 10, color: '#9ca3af', marginTop: 1 },
-  payAmt:        { fontSize: 12, color: '#059669', fontWeight: '700' },
-  payTotal:      { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  payTotalL:     { fontSize: 12, fontWeight: '700', color: '#111827' },
-  payTotalV:     { fontSize: 14, fontWeight: '800', color: '#059669' },
+  container:    { backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, marginTop: 10, borderWidth: 1, borderColor: '#e2e8f0' },
+  title:        { fontSize: 11, fontWeight: '700', color: '#374151', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  row:          { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
+  stepCol:      { flex: 1, alignItems: 'center', position: 'relative' },
+  line:         { position: 'absolute', left: '-50%', right: '50%', top: 11, height: 2, backgroundColor: '#e5e7eb', zIndex: 0 },
+  lineDone:     { backgroundColor: '#111827' },
+  dot:          { width: 24, height: 24, borderRadius: 12, backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center', zIndex: 1, marginBottom: 3 },
+  dotDone:      { backgroundColor: '#111827' },
+  dotCurrent:   { backgroundColor: '#111827', shadowColor: '#111827', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 5, elevation: 4 },
+  label:        { fontSize: 8, color: '#9ca3af', textAlign: 'center', fontWeight: '500' },
+  labelDone:    { color: '#374151' },
+  labelCurrent: { color: '#111827', fontWeight: '700' },
+  driverBadge:  { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start', marginTop: 6 },
+  driverText:   { fontSize: 12, color: '#111827', fontWeight: '600' },
+  pills:        { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
+  pill:         { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  pillTxt:      { fontSize: 11, fontWeight: '600' },
+  paySection:   { marginTop: 10, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8 },
+  payTitle:     { fontSize: 10, fontWeight: '700', color: '#374151', marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 },
+  payRow:       { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  payEvent:     { fontSize: 12, color: '#1f2937', fontWeight: '500' },
+  payTime:      { fontSize: 10, color: '#9ca3af', marginTop: 1 },
+  payAmt:       { fontSize: 12, color: '#059669', fontWeight: '700' },
+  payTotal:     { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  payTotalL:    { fontSize: 12, fontWeight: '700', color: '#111827' },
+  payTotalV:    { fontSize: 14, fontWeight: '800', color: '#059669' },
 });
 
 // ─── Assign Driver Modal ───────────────────────────────────────────────────────
@@ -302,15 +315,11 @@ const StatusModal = ({ visible, booking, onClose, onUpdate, loading }) => {
   };
 
   const statusLabel = {
-    confirmed: '✅ Confirm Booking',
-    ongoing:   '🚗 Mark Ongoing',
-    delivered: '📦 Mark Delivered',
-    retrieved: '🔁 Mark Retrieved',
-    completed: '🏁 Mark Completed',
-    cancelled: '🚫 Cancel Booking',
+    confirmed: '✅ Confirm Booking', ongoing:   '🚗 Mark Ongoing',
+    delivered: '📦 Mark Delivered',  retrieved: '🔁 Mark Retrieved',
+    completed: '🏁 Mark Completed',  cancelled: '🚫 Cancel Booking',
     declined:  '❌ Decline Booking',
   };
-
   const statusDesc = {
     confirmed: 'Accept this booking and assign a driver.',
     ongoing:   'Driver is en route to deliver the vehicle.',
@@ -403,22 +412,18 @@ const stS = StyleSheet.create({
   chipTxt:      { fontSize: 13, fontWeight: '700', textTransform: 'capitalize' },
 });
 
-// ─── Booking Card ──────────────────────────────────────────────────────────────
-const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardPress }) => {
+// ─── Booking Card (memoized to prevent re-renders) ────────────────────────────
+const BookingCard = memo(({ booking, activeTab, onStatusPress, onAssignPress, onCardPress }) => {
   const status      = booking.status || 'pending';
   const color       = STATUS_COLOR[status] || '#6b7280';
-  const isDelivery  = booking.delivery_option === 'deliver' || ['ongoing','delivered','retrieved','completed'].includes(status);
+  const isDelivery  = isDeliveryBooking(booking);
   const driverStats = ['confirmed','ongoing','delivered','retrieved','completed'];
   const showTimeline = activeTab === 'delivery' && isDelivery && driverStats.includes(status);
   const plate        = booking.vehicle_variants?.plate_number;
   const vehicleLine  = [booking.vehicles?.year, booking.vehicles?.make, booking.vehicles?.model].filter(Boolean).join(' ');
   const totalPaid    = (booking.payment_log || []).reduce((a, e) => a + (Number(e.amount) || 0), 0);
-
-  // ── Fuel type info ──────────────────────────────────────────────────────────
-  const fuelType = booking.vehicles?.fuel_type;
-  const fuelMeta = fuelType ? getFuelMeta(fuelType) : null;
-
-  // ── Deposit info ────────────────────────────────────────────────────────────
+  const fuelType     = booking.vehicles?.fuel_type;
+  const fuelMeta     = fuelType ? getFuelMeta(fuelType) : null;
   const depositAmount    = Number(booking.vehicles?.deposit_amount || booking.deposit_amount || 0);
   const depositCollected = Number(booking.deposit_collected || 0);
   const depositReturned  = !!booking.deposit_returned;
@@ -426,7 +431,6 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
 
   return (
     <TouchableOpacity style={[cardS.card, { borderLeftColor: color }]} onPress={() => onCardPress(booking)} activeOpacity={0.85}>
-
       <View style={cardS.head}>
         <View style={cardS.avatar}>
           <Text style={cardS.avatarTxt}>{(booking.customer_name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}</Text>
@@ -445,32 +449,12 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
         </TouchableOpacity>
       </View>
 
-      {/* Fuel type + plate pills */}
       <View style={cardS.pillRow}>
-        {plate && (
-          <View style={cardS.pill}>
-            <Ionicons name="car-outline" size={11} color="#374151" />
-            <Text style={cardS.pillTxt}>{plate}</Text>
-          </View>
-        )}
-        {booking.license_number && (
-          <View style={cardS.pill}>
-            <Ionicons name="id-card-outline" size={11} color="#6b7280" />
-            <Text style={cardS.pillTxt}>Lic: {booking.license_number}</Text>
-          </View>
-        )}
-        {booking.vehicle_variants?.color && (
-          <View style={cardS.pill}>
-            <Ionicons name="color-palette-outline" size={11} color="#6b7280" />
-            <Text style={cardS.pillTxt}>{booking.vehicle_variants.color}</Text>
-          </View>
-        )}
-        {fuelMeta && (
-          <View style={[cardS.pill, { backgroundColor: fuelMeta.bg }]}>
-            <Ionicons name={fuelMeta.icon} size={11} color={fuelMeta.color} />
-            <Text style={[cardS.pillTxt, { color: fuelMeta.color }]}>{fuelType}</Text>
-          </View>
-        )}
+        {plate && (<View style={cardS.pill}><Ionicons name="car-outline" size={11} color="#374151" /><Text style={cardS.pillTxt}>{plate}</Text></View>)}
+        {booking.license_number && (<View style={cardS.pill}><Ionicons name="id-card-outline" size={11} color="#6b7280" /><Text style={cardS.pillTxt}>Lic: {booking.license_number}</Text></View>)}
+        {booking.vehicle_variants?.color && (<View style={cardS.pill}><Ionicons name="color-palette-outline" size={11} color="#6b7280" /><Text style={cardS.pillTxt}>{booking.vehicle_variants.color}</Text></View>)}
+        {fuelMeta && (<View style={[cardS.pill, { backgroundColor: fuelMeta.bg }]}><Ionicons name={fuelMeta.icon} size={11} color={fuelMeta.color} /><Text style={[cardS.pillTxt, { color: fuelMeta.color }]}>{fuelType}</Text></View>)}
+        {isDelivery && (<View style={[cardS.pill, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe', borderWidth: 1 }]}><Ionicons name="car-outline" size={11} color="#2563eb" /><Text style={[cardS.pillTxt, { color: '#2563eb' }]}>Delivery</Text></View>)}
       </View>
 
       <View style={cardS.row}>
@@ -490,35 +474,12 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
         <Text style={cardS.rowTxt}>{fmt(booking.total_price)}</Text>
       </View>
 
-      {/* ── Deposit badge ── */}
       {showDeposit && (
-        <View style={[
-          cardS.depositBadge,
-          depositReturned
-            ? cardS.depositBadgeReturned
-            : depositCollected > 0
-              ? cardS.depositBadgeCollected
-              : cardS.depositBadgePending
-        ]}>
-          <Ionicons
-            name={depositReturned ? 'shield-checkmark' : depositCollected > 0 ? 'shield' : 'shield-outline'}
-            size={14}
-            color={depositReturned ? '#059669' : depositCollected > 0 ? '#7c3aed' : '#6b7280'}
-          />
+        <View style={[cardS.depositBadge, depositReturned ? cardS.depositBadgeReturned : depositCollected > 0 ? cardS.depositBadgeCollected : cardS.depositBadgePending]}>
+          <Ionicons name={depositReturned ? 'shield-checkmark' : depositCollected > 0 ? 'shield' : 'shield-outline'} size={14} color={depositReturned ? '#059669' : depositCollected > 0 ? '#7c3aed' : '#6b7280'} />
           <View style={{ flex: 1, marginLeft: 6 }}>
-            <Text style={[
-              cardS.depositAmt,
-              { color: depositReturned ? '#059669' : depositCollected > 0 ? '#7c3aed' : '#374151' }
-            ]}>
-              {fmt(depositAmount)} Security Deposit
-            </Text>
-            <Text style={cardS.depositSub}>
-              {depositReturned
-                ? '✓ Returned to customer'
-                : depositCollected > 0
-                  ? `Collected — to be returned at retrieval`
-                  : 'Collect at delivery'}
-            </Text>
+            <Text style={[cardS.depositAmt, { color: depositReturned ? '#059669' : depositCollected > 0 ? '#7c3aed' : '#374151' }]}>{fmt(depositAmount)} Security Deposit</Text>
+            <Text style={cardS.depositSub}>{depositReturned ? '✓ Returned to customer' : depositCollected > 0 ? 'Collected — to be returned at retrieval' : 'Collect at delivery'}</Text>
           </View>
         </View>
       )}
@@ -527,8 +488,7 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
         <Ionicons name="person-circle-outline" size={14} color="#374151" />
         {booking.assigned_driver
           ? <Text style={cardS.driverTxt}>Driver: <Text style={{ fontWeight: '700', color: '#111827' }}>{booking.assigned_driver}</Text></Text>
-          : <Text style={cardS.noDriver}>No driver assigned</Text>
-        }
+          : <Text style={cardS.noDriver}>No driver assigned</Text>}
       </View>
 
       {(booking.fuel_charge > 0 || booking.delay_charge > 0 || booking.damage_fee > 0) && (
@@ -566,45 +526,42 @@ const BookingCard = ({ booking, activeTab, onStatusPress, onAssignPress, onCardP
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const cardS = StyleSheet.create({
-  card:        { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 14, borderLeftWidth: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 3, marginHorizontal: 16 },
-  head:        { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 10 },
-  avatar:      { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
-  avatarTxt:   { fontSize: 14, fontWeight: '700', color: '#374151' },
-  name:        { fontSize: 16, fontWeight: '700', color: '#111827' },
-  vehicle:     { fontSize: 13, color: '#374151', marginTop: 2 },
-  statusPill:  { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  statusTxt:   { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
-  pillRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  pill:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f3f4f6', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  pillTxt:     { fontSize: 11, color: '#374151', fontWeight: '600' },
-  row:         { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  rowTxt:      { fontSize: 13, color: '#6b7280', flex: 1 },
-  driverRow:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#f8fafc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  driverTxt:   { fontSize: 13, color: '#374151' },
-  noDriver:    { fontSize: 12, color: '#f59e0b', fontWeight: '600' },
-  chargePills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  cpill:       { backgroundColor: '#fffbeb', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  cpillTxt:    { fontSize: 12, fontWeight: '600', color: '#92400e' },
-
-  // Deposit badge variants
+  card:                  { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 14, borderLeftWidth: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 3, marginHorizontal: 16 },
+  head:                  { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 10 },
+  avatar:                { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
+  avatarTxt:             { fontSize: 14, fontWeight: '700', color: '#374151' },
+  name:                  { fontSize: 16, fontWeight: '700', color: '#111827' },
+  vehicle:               { fontSize: 13, color: '#374151', marginTop: 2 },
+  statusPill:            { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  statusTxt:             { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  pillRow:               { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  pill:                  { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f3f4f6', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  pillTxt:               { fontSize: 11, color: '#374151', fontWeight: '600' },
+  row:                   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  rowTxt:                { fontSize: 13, color: '#6b7280', flex: 1 },
+  driverRow:             { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#f8fafc', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  driverTxt:             { fontSize: 13, color: '#374151' },
+  noDriver:              { fontSize: 12, color: '#f59e0b', fontWeight: '600' },
+  chargePills:           { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  cpill:                 { backgroundColor: '#fffbeb', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  cpillTxt:              { fontSize: 12, fontWeight: '600', color: '#92400e' },
   depositBadge:          { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8, borderWidth: 1 },
   depositBadgePending:   { backgroundColor: '#f9fafb', borderColor: '#e5e7eb' },
   depositBadgeCollected: { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' },
   depositBadgeReturned:  { backgroundColor: '#f0fdf4', borderColor: '#86efac' },
-  depositAmt:  { fontSize: 13, fontWeight: '700' },
-  depositSub:  { fontSize: 11, color: '#6b7280', marginTop: 1 },
-
-  totalPaid:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0fdf4', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: '#86efac' },
-  totalPaidL:  { fontSize: 13, fontWeight: '600', color: '#166534' },
-  totalPaidV:  { fontSize: 15, fontWeight: '800', color: '#15803d' },
-  actions:     { flexDirection: 'row', gap: 8, marginTop: 14 },
-  actionBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 9, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
-  actionBtnAlt:{ backgroundColor: '#f9fafb' },
-  actionBtnDark:{ backgroundColor: '#111827', borderColor: '#111827' },
-  actionTxt:   { fontSize: 12, fontWeight: '600', color: '#374151' },
+  depositAmt:            { fontSize: 13, fontWeight: '700' },
+  depositSub:            { fontSize: 11, color: '#6b7280', marginTop: 1 },
+  totalPaid:             { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0fdf4', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: '#86efac' },
+  totalPaidL:            { fontSize: 13, fontWeight: '600', color: '#166534' },
+  totalPaidV:            { fontSize: 15, fontWeight: '800', color: '#15803d' },
+  actions:               { flexDirection: 'row', gap: 8, marginTop: 14 },
+  actionBtn:             { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 9, backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
+  actionBtnAlt:          { backgroundColor: '#f9fafb' },
+  actionBtnDark:         { backgroundColor: '#111827', borderColor: '#111827' },
+  actionTxt:             { fontSize: 12, fontWeight: '600', color: '#374151' },
 });
 
 // ─── Main BookingsScreen ───────────────────────────────────────────────────────
@@ -658,10 +615,11 @@ export default function BookingsScreen({ route, navigation }) {
   }, [bookings, route?.params]);
 
   useEffect(() => { applyFilters(); }, [bookings, activeTab, listStatusFilter, listDateFilter, vehicleTypeFilter]);
-  useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(1); }, [filteredBookings]);
 
   const totalPages = Math.ceil(filteredBookings.length / ITEMS_PER_PAGE);
+  useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(1); }, [filteredBookings]);
 
+  // ── Fetchers ──────────────────────────────────────────────────────────────
   const fetchBookings = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
@@ -692,9 +650,7 @@ export default function BookingsScreen({ route, navigation }) {
     } catch (e) { console.error(e); }
   };
 
-  const isDeliveryBooking = (b) =>
-    b.delivery_option === 'deliver' || ['ongoing','delivered','retrieved','completed'].includes(b.status);
-
+  // ── Filters ───────────────────────────────────────────────────────────────
   const applyFilters = () => {
     let list = [...bookings];
     const now = new Date();
@@ -713,24 +669,20 @@ export default function BookingsScreen({ route, navigation }) {
     setCurrentPage(1);
   };
 
-  const computeInventoryAdjustment = (oldStatus, newStatus) => {
-    const terminals  = ['completed', 'cancelled', 'declined', 'pending'];
-    const wasActive  = INVENTORY_RESERVED_STATUSES.includes(oldStatus);
-    const willActive = INVENTORY_RESERVED_STATUSES.includes(newStatus);
-    if (!wasActive && newStatus === 'confirmed') return -1;
-    if (wasActive && terminals.includes(newStatus)) return +1;
-    return 0;
-  };
-
+  // ── Status update — OPTIMISTIC ────────────────────────────────────────────
   const handleStatusUpdate = async (bookingId, newStatus, declineReason = '') => {
     setStatusLoading(true);
     try {
       const existing = bookings.find(b => b.id === bookingId);
       if (!existing) throw new Error('Booking not found');
       const oldStatus = existing.status;
-      if (oldStatus === newStatus) { setStatusModal({ visible: false, booking: null }); setStatusLoading(false); return; }
-      const variantId          = existing.vehicle_variant_id;
-      const quantityAdjustment = computeInventoryAdjustment(oldStatus, newStatus);
+      if (oldStatus === newStatus) {
+        setStatusModal({ visible: false, booking: null });
+        setStatusLoading(false);
+        return;
+      }
+      const variantId = existing.vehicle_variant_id;
+      const q = computeInventoryAdjustment(oldStatus, newStatus);
       const updatePayload = {
         status: newStatus, updated_at: new Date().toISOString(),
         ...(declineReason ? { decline_reason: declineReason } : {}),
@@ -738,80 +690,147 @@ export default function BookingsScreen({ route, navigation }) {
         ...(existing.assigned_driver_id    ? { assigned_driver_id:    existing.assigned_driver_id }    : {}),
         ...(existing.assigned_driver_email ? { assigned_driver_email: existing.assigned_driver_email } : {}),
       };
-      await bookingsService.update(bookingId, updatePayload);
+
+      // ✅ 1. Update UI immediately + close sheet
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, ...updatePayload } : b));
-      if (quantityAdjustment !== 0 && variantId) {
-        try { await variantsService.adjustQuantity(variantId, quantityAdjustment); } catch (invErr) { console.warn('Inventory adjustment failed:', invErr); }
+      setStatusModal({ visible: false, booking: null });
+      setFeedbackModal({ visible: true, type: 'success', message: `Status updated to "${newStatus}".` });
+
+      // ✅ 2. Persist in background (don't block UI)
+      await bookingsService.update(bookingId, updatePayload);
+      if (q !== 0 && variantId) {
+        variantsService.adjustQuantity(variantId, q).catch(e => console.warn('Inventory adjustment failed:', e));
       }
       if (['completed', 'cancelled', 'declined'].includes(newStatus)) fetchAvailableVehicles();
+
+      // ✅ 3. Email — fire and forget
       if (existing.customer_email) {
-        try { await EmailService.sendStatusUpdateEmail({ ...existing, newStatus, bookingId, vehicleMake: existing.vehicles?.make || 'N/A', vehicleModel: existing.vehicles?.model || 'N/A', vehicleYear: existing.vehicles?.year || 'N/A', updated_date: new Date().toISOString(), decline_reason: newStatus === 'declined' ? declineReason : null }, newStatus); } catch { }
+        EmailService.sendStatusUpdateEmail({
+          ...existing, newStatus, bookingId,
+          vehicleMake: existing.vehicles?.make || 'N/A', vehicleModel: existing.vehicles?.model || 'N/A',
+          vehicleYear: existing.vehicles?.year || 'N/A', updated_date: new Date().toISOString(),
+          decline_reason: newStatus === 'declined' ? declineReason : null,
+        }, newStatus).catch(() => {});
       }
-      setStatusModal({ visible: false, booking: null });
-      setFeedbackModal({ visible: true, type: 'success', message: `Status updated to "${newStatus}"${existing.customer_email ? ' & customer notified' : ''}.` });
     } catch (err) {
       console.error('Status update error:', err);
+      fetchBookings(true); // roll back silently
       setFeedbackModal({ visible: true, type: 'error', message: err?.message || 'Status update failed.' });
     } finally {
       setStatusLoading(false);
     }
   };
 
+  // ── Assign driver — OPTIMISTIC ────────────────────────────────────────────
   const handleAssignDriver = async (bookingId, driver) => {
     try {
       const displayName = driver.full_name || driver.email;
-      await bookingsService.update(bookingId, { assigned_driver: displayName, assigned_driver_id: driver.id, assigned_driver_email: driver.email || '' });
-      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, assigned_driver: displayName, assigned_driver_id: driver.id, assigned_driver_email: driver.email || '' } : b));
+      const patch = { assigned_driver: displayName, assigned_driver_id: driver.id, assigned_driver_email: driver.email || '' };
+
+      // ✅ Optimistic update immediately
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, ...patch } : b));
       setFeedbackModal({ visible: true, type: 'success', message: `Driver "${displayName}" assigned!` });
+
+      await bookingsService.update(bookingId, patch);
     } catch {
+      fetchBookings(true); // roll back
       setFeedbackModal({ visible: true, type: 'error', message: 'Failed to assign driver.' });
     }
   };
 
-  const deleteBooking = async (bookingId) => {
+  // ── DELETE — OPTIMISTIC: remove from UI first, close modal, then persist ──
+  const deleteBooking = useCallback(async (bookingId) => {
+    // ✅ 1. Remove from local state immediately so FlatList updates instantly
+    setBookings(prev => prev.filter(b => b.id !== bookingId));
+
+    // ✅ 2. Close modal FIRST — animation runs free without JS thread competition
+    closeEditModal();
+    setFeedbackModal({ visible: true, type: 'success', message: 'Booking deleted.' });
+
+    // ✅ 3. Persist to Firestore in background
     try {
       const b = await bookingsService.getById(bookingId);
-      if (b?.status === 'confirmed' && b.vehicle_variant_id) await variantsService.adjustQuantity(b.vehicle_variant_id, +1);
+      if (b?.status === 'confirmed' && b.vehicle_variant_id) {
+        variantsService.adjustQuantity(b.vehicle_variant_id, +1).catch(console.warn);
+      }
       await bookingsService.delete(bookingId);
-      await fetchBookings();
-      await fetchAvailableVehicles();
-      closeEditModal();
-      setFeedbackModal({ visible: true, type: 'success', message: 'Booking deleted.' });
-    } catch { setFeedbackModal({ visible: true, type: 'error', message: 'Delete failed.' }); }
-  };
+      fetchAvailableVehicles();
+      fetchBookings(true); // silent background sync
+    } catch {
+      fetchBookings(true); // roll back on failure
+      setFeedbackModal({ visible: true, type: 'error', message: 'Delete failed.' });
+    }
+  }, [closeEditModal]);
 
-  const updateBooking = async (updatedBooking) => {
+  // ── UPDATE — OPTIMISTIC: update UI first, close modal, then persist ────────
+  const updateBooking = useCallback(async (updatedBooking) => {
     try {
-      const existing = await bookingsService.getById(updatedBooking.id);
-      if (!existing) { setFeedbackModal({ visible: true, type: 'error', message: 'Booking not found.' }); return; }
-      if (updatedBooking.status === 'declined' && !updatedBooking.decline_reason?.trim()) { setFeedbackModal({ visible: true, type: 'error', message: 'Please provide a decline reason.' }); return; }
-      const oldStatus = existing.status;
+      if (updatedBooking.status === 'declined' && !updatedBooking.decline_reason?.trim()) {
+        setFeedbackModal({ visible: true, type: 'error', message: 'Please provide a decline reason.' });
+        return;
+      }
+      const existing  = bookings.find(b => b.id === updatedBooking.id);
+      const oldStatus = existing?.status;
       const newStatus = updatedBooking.status;
-      const variantId = updatedBooking.vehicle_variant_id || existing.vehicle_variant_id;
-      const q = computeInventoryAdjustment(oldStatus, newStatus);
-      await bookingsService.update(updatedBooking.id, {
-        customer_name: updatedBooking.customer_name, customer_email: updatedBooking.customer_email,
-        customer_phone: updatedBooking.customer_phone, rental_start_date: updatedBooking.rental_start_date,
-        rental_end_date: updatedBooking.rental_end_date, total_price: updatedBooking.total_price,
-        pickup_location: updatedBooking.pickup_location, license_number: updatedBooking.license_number,
-        vehicle_id: updatedBooking.vehicle_id, vehicle_variant_id: updatedBooking.vehicle_variant_id,
-        status: newStatus, gov_id_url: updatedBooking.gov_id_url,
-        decline_reason: updatedBooking.decline_reason || null,
-        assigned_driver: updatedBooking.assigned_driver || null, updated_at: new Date().toISOString(),
-      });
-      if (q !== 0 && variantId) { try { await variantsService.adjustQuantity(variantId, q); } catch (invErr) { console.warn('Inventory adjustment failed:', invErr); } }
-      await fetchBookings();
-      await fetchAvailableVehicles();
-      closeEditModal();
-      if (oldStatus !== newStatus && updatedBooking.customer_email) {
-        try {
-          await EmailService.sendStatusUpdateEmail({ ...updatedBooking, newStatus, bookingId: updatedBooking.id, vehicleMake: updatedBooking.vehicles?.make || existing.vehicles?.make || 'N/A', vehicleModel: updatedBooking.vehicles?.model || existing.vehicles?.model || 'N/A', vehicleYear: updatedBooking.vehicles?.year || existing.vehicles?.year || 'N/A', variantColor: updatedBooking.vehicle_variants?.color || existing.vehicle_variants?.color || null, updated_date: new Date().toISOString(), decline_reason: newStatus === 'declined' ? updatedBooking.decline_reason : null }, newStatus);
-          setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated & customer notified!' });
-        } catch (emailErr) { setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated (email notification failed).' }); }
-      } else { setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated!' }); }
-    } catch (err) { setFeedbackModal({ visible: true, type: 'error', message: err?.message || 'Update failed.' }); }
-  };
+      const variantId = updatedBooking.vehicle_variant_id || existing?.vehicle_variant_id;
+      const q         = computeInventoryAdjustment(oldStatus, newStatus);
 
+      // ✅ 1. Update local state immediately
+      setBookings(prev => prev.map(b => b.id === updatedBooking.id ? { ...b, ...updatedBooking } : b));
+
+      // ✅ 2. Close modal FIRST — animation runs free
+      closeEditModal();
+      setFeedbackModal({ visible: true, type: 'success', message: 'Booking updated!' });
+
+      // ✅ 3. Persist to Firestore in background
+      await bookingsService.update(updatedBooking.id, {
+        customer_name:      updatedBooking.customer_name,
+        customer_email:     updatedBooking.customer_email,
+        customer_phone:     updatedBooking.customer_phone,
+        license_number:     updatedBooking.license_number,
+        rental_start_date:  updatedBooking.rental_start_date,
+        rental_end_date:    updatedBooking.rental_end_date,
+        rental_days:        updatedBooking.rental_days || 0,
+        total_price:        updatedBooking.total_price,
+        delivery_option:    updatedBooking.delivery_option || 'pickup',
+        pickup_location:    updatedBooking.delivery_option === 'pickup'  ? (updatedBooking.pickup_location  || '') : '',
+        delivery_address:   updatedBooking.delivery_option === 'deliver' ? (updatedBooking.delivery_address || '') : '',
+        vehicle_id:         updatedBooking.vehicle_id,
+        vehicle_variant_id: updatedBooking.vehicle_variant_id,
+        gov_id_url:         updatedBooking.gov_id_url || '',
+        status:             newStatus,
+        decline_reason:     updatedBooking.decline_reason || null,
+        assigned_driver:    updatedBooking.assigned_driver    || null,
+        assigned_driver_id: updatedBooking.assigned_driver_id || null,
+        updated_at:         new Date().toISOString(),
+      });
+
+      if (q !== 0 && variantId) {
+        variantsService.adjustQuantity(variantId, q).catch(e => console.warn('Inventory adjustment failed:', e));
+      }
+      if (['completed', 'cancelled', 'declined'].includes(newStatus)) fetchAvailableVehicles();
+
+      // ✅ 4. Email — fire and forget
+      if (oldStatus !== newStatus && updatedBooking.customer_email) {
+        EmailService.sendStatusUpdateEmail({
+          ...updatedBooking, newStatus, bookingId: updatedBooking.id,
+          vehicleMake:    updatedBooking.vehicles?.make  || existing?.vehicles?.make  || 'N/A',
+          vehicleModel:   updatedBooking.vehicles?.model || existing?.vehicles?.model || 'N/A',
+          vehicleYear:    updatedBooking.vehicles?.year  || existing?.vehicles?.year  || 'N/A',
+          updated_date:   new Date().toISOString(),
+          decline_reason: newStatus === 'declined' ? updatedBooking.decline_reason : null,
+        }, newStatus).catch(() => {});
+      }
+
+      // ✅ 5. Silent background sync to reconcile with server
+      fetchBookings(true);
+    } catch (err) {
+      fetchBookings(true); // roll back on error
+      setFeedbackModal({ visible: true, type: 'error', message: err?.message || 'Update failed.' });
+    }
+  }, [bookings, closeEditModal]);
+
+  // ── Modal open/close ──────────────────────────────────────────────────────
   const openEditModal = useCallback((booking) => {
     setSelectedBooking(booking);
     setEditModalVisible(true);
@@ -834,11 +853,12 @@ export default function BookingsScreen({ route, navigation }) {
       .start(() => setAddModalVisible(false));
   }, [addModalAnimation]);
 
-  const formatDate = (d) => {
+  const formatDate = useCallback((d) => {
     if (!d) return '';
     return new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  };
+  }, []);
 
+  // ── Inline component helpers (defined in render but stable via useCallback) ─
   const EnhancedDropdown = ({ visible, onClose, children, title }) => {
     const anim = useState(new Animated.Value(0))[0];
     useEffect(() => { Animated.spring(anim, { toValue: visible ? 1 : 0, tension: 100, friction: 8, useNativeDriver: true }).start(); }, [visible]);
@@ -888,10 +908,19 @@ export default function BookingsScreen({ route, navigation }) {
     );
   };
 
-  const deliveryBookings = bookings.filter(isDeliveryBooking);
-  const paginated        = filteredBookings.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  // ── Stable callbacks for card (prevent FlatList re-renders) ───────────────
+  const handleStatusPress = useCallback((b) => setStatusModal({ visible: true, booking: b }), []);
+  const handleAssignPress = useCallback((b) => setAssignModal({ visible: true, booking: b }), []);
 
-  const renderHeader = () => (
+  // ── Derived data ──────────────────────────────────────────────────────────
+  const deliveryBookings = useMemo(() => bookings.filter(isDeliveryBooking), [bookings]);
+  const paginated        = useMemo(
+    () => filteredBookings.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE),
+    [filteredBookings, currentPage]
+  );
+
+  // ── Memoized header — KEY FIX: was re-creating every render, thrashing FlatList
+  const ListHeader = useMemo(() => (
     <View>
       <View style={sc.header}>
         <View>
@@ -922,8 +951,8 @@ export default function BookingsScreen({ route, navigation }) {
         <View style={sc.strip}>
           {[
             { label: 'Unassigned', count: deliveryBookings.filter(b => !b.assigned_driver && !['completed','cancelled'].includes(b.status)).length, color: '#f59e0b', icon: 'alert-circle' },
-            { label: 'Active', count: deliveryBookings.filter(b => ['confirmed','ongoing','delivered','retrieved'].includes(b.status)).length, color: '#111827', icon: 'car' },
-            { label: 'Done', count: deliveryBookings.filter(b => b.status === 'completed').length, color: '#10b981', icon: 'checkmark-circle' },
+            { label: 'Active',     count: deliveryBookings.filter(b => ['confirmed','ongoing','delivered','retrieved'].includes(b.status)).length, color: '#111827', icon: 'car' },
+            { label: 'Done',       count: deliveryBookings.filter(b => b.status === 'completed').length, color: '#10b981', icon: 'checkmark-circle' },
           ].map(s => (
             <View key={s.label} style={sc.stripItem}>
               <Ionicons name={s.icon} size={16} color={s.color} />
@@ -952,42 +981,57 @@ export default function BookingsScreen({ route, navigation }) {
         <Text style={sc.resultCount}>{filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}</Text>
       </View>
     </View>
-  );
+  ), [lastRefreshed, bookings.length, deliveryBookings, activeTab, listStatusFilter, listDateFilter, vehicleTypeFilter, filteredBookings.length, openAddModal]);
 
-  const renderEmpty = () => (
+  // ── Memoized empty & footer ───────────────────────────────────────────────
+  const ListEmpty = useMemo(() => (
     <View style={sc.empty}>
       {loading ? <ActivityIndicator size="large" color="#111827" /> : (
         <><Ionicons name="document-text-outline" size={48} color="#d1d5db" /><Text style={sc.emptyTitle}>No bookings found</Text><Text style={sc.emptySub}>Try adjusting your filters</Text></>
       )}
     </View>
-  );
+  ), [loading]);
 
-  const renderPagination = () => {
-    if (totalPages <= 1) return null;
+  const ListFooter = useMemo(() => {
+    if (totalPages <= 1) return <View style={{ paddingBottom: 30 }} />;
     return (
-      <View style={sc.pagination}>
-        <Text style={sc.pageInfo}>Page {currentPage} of {totalPages}</Text>
-        <View style={sc.pageControls}>
-          <TouchableOpacity style={[sc.pageBtn, currentPage === 1 && sc.pageBtnOff]} onPress={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
-            <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? '#d1d5db' : '#374151'} />
-          </TouchableOpacity>
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            let p = currentPage <= 3 ? i + 1 : currentPage >= totalPages - 2 ? totalPages - 4 + i : currentPage - 2 + i;
-            if (totalPages <= 5) p = i + 1;
-            return (
-              <TouchableOpacity key={p} style={[sc.pageNum, currentPage === p && sc.pageNumActive]} onPress={() => setCurrentPage(p)}>
-                <Text style={[sc.pageNumTxt, currentPage === p && sc.pageNumTxtActive]}>{p}</Text>
-              </TouchableOpacity>
-            );
-          })}
-          <TouchableOpacity style={[sc.pageBtn, currentPage === totalPages && sc.pageBtnOff]} onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
-            <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? '#d1d5db' : '#374151'} />
-          </TouchableOpacity>
+      <View style={{ paddingBottom: 30 }}>
+        <View style={sc.pagination}>
+          <Text style={sc.pageInfo}>Page {currentPage} of {totalPages}</Text>
+          <View style={sc.pageControls}>
+            <TouchableOpacity style={[sc.pageBtn, currentPage === 1 && sc.pageBtnOff]} onPress={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+              <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? '#d1d5db' : '#374151'} />
+            </TouchableOpacity>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let p = currentPage <= 3 ? i + 1 : currentPage >= totalPages - 2 ? totalPages - 4 + i : currentPage - 2 + i;
+              if (totalPages <= 5) p = i + 1;
+              return (
+                <TouchableOpacity key={p} style={[sc.pageNum, currentPage === p && sc.pageNumActive]} onPress={() => setCurrentPage(p)}>
+                  <Text style={[sc.pageNumTxt, currentPage === p && sc.pageNumTxtActive]}>{p}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity style={[sc.pageBtn, currentPage === totalPages && sc.pageBtnOff]} onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+              <Ionicons name="chevron-forward" size={20} color={currentPage === totalPages ? '#d1d5db' : '#374151'} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
-  };
+  }, [totalPages, currentPage]);
 
+  // ── Stable renderItem — CRITICAL: inline arrow fn here was re-creating every render
+  const renderItem = useCallback(({ item }) => (
+    <BookingCard
+      booking={item}
+      activeTab={activeTab}
+      onStatusPress={handleStatusPress}
+      onAssignPress={handleAssignPress}
+      onCardPress={openEditModal}
+    />
+  ), [activeTab, handleStatusPress, handleAssignPress, openEditModal]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={sc.container}>
       <EnhancedDropdown visible={statusDropdownVisible} onClose={() => setStatusDropdownVisible(false)} title="Filter by Status">
@@ -1018,92 +1062,103 @@ export default function BookingsScreen({ route, navigation }) {
           onClose={() => setActionModalConfig(null)} onConfirm={() => { actionModalConfig.onConfirm(); setActionModalConfig(null); }} />
       )}
 
-      <EditBookingModal visible={editModalVisible} booking={selectedBooking} availableVehicles={availableVehicles} closeEditModal={closeEditModal} updateBooking={updateBooking} deleteBooking={deleteBooking} modalAnimation={modalAnimation} styles={sc} formatDate={formatDate} CalendarModalComponent={CalendarModal}
+      <EditBookingModal
+        visible={editModalVisible} booking={selectedBooking}
+        availableVehicles={availableVehicles} closeEditModal={closeEditModal}
+        updateBooking={updateBooking} deleteBooking={deleteBooking}
+        modalAnimation={modalAnimation} styles={sc} formatDate={formatDate}
+        CalendarModalComponent={CalendarModal}
         onAssignDriver={(b) => setAssignModal({ visible: true, booking: b })}
-        extraContent={selectedBooking && isDeliveryBooking(selectedBooking) ? (<DriverStatusTimeline booking={selectedBooking} />) : null}
+        extraContent={selectedBooking && isDeliveryBooking(selectedBooking) ? <DriverStatusTimeline booking={selectedBooking} /> : null}
       />
-      <AddBookingModal visible={addModalVisible} availableVehicles={availableVehicles} closeModal={closeAddModal}
-        onBookingAdded={async () => { await fetchBookings(); await fetchAvailableVehicles(); setFeedbackModal({ visible: true, type: 'success', message: 'Booking added!' }); }}
-        modalAnimation={addModalAnimation} styles={sc} formatDate={formatDate} CalendarModalComponent={CalendarModal}
+      <AddBookingModal
+        visible={addModalVisible} availableVehicles={availableVehicles} closeModal={closeAddModal}
+        onBookingAdded={async (newBooking) => {
+          // ✅ Optimistic prepend if newBooking returned, else silent sync
+          if (newBooking) setBookings(prev => [newBooking, ...prev]);
+          fetchBookings(true);
+          fetchAvailableVehicles();
+          setFeedbackModal({ visible: true, type: 'success', message: 'Booking added!' });
+        }}
+        modalAnimation={addModalAnimation} styles={sc} formatDate={formatDate}
+        CalendarModalComponent={CalendarModal}
       />
 
       <FlatList
         data={paginated}
         keyExtractor={item => item.id.toString()}
-        ListHeaderComponent={renderHeader()}
-        ListEmptyComponent={renderEmpty()}
-        ListFooterComponent={<View style={{ paddingBottom: 30 }}>{renderPagination()}</View>}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={ListEmpty}
+        ListFooterComponent={ListFooter}
         onRefresh={() => { setRefreshing(true); fetchBookings(); fetchAvailableVehicles(); }}
         refreshing={refreshing}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 20 }}
-        renderItem={({ item }) => (
-          <BookingCard booking={item} activeTab={activeTab}
-            onStatusPress={(b) => setStatusModal({ visible: true, booking: b })}
-            onAssignPress={(b) => setAssignModal({ visible: true, booking: b })}
-            onCardPress={openEditModal}
-          />
-        )}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={6}
+        windowSize={10}
+        initialNumToRender={6}
+        renderItem={renderItem}
       />
     </SafeAreaView>
   );
 }
 
 const sc = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: '#f9fafb' },
-  header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, backgroundColor: '#f9fafb' },
-  headerTitle:  { fontSize: 26, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-  lastRefresh:  { fontSize: 11, color: '#9ca3af', marginTop: 3 },
-  headerActions:{ flexDirection: 'row', gap: 10, alignItems: 'center' },
-  refreshBtn:   { width: 38, height: 38, borderRadius: 10, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' },
-  addBtn:       { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111827', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, gap: 6 },
-  addBtnTxt:    { color: '#fff', fontSize: 14, fontWeight: '600' },
-  tabBar:       { flexDirection: 'row', marginHorizontal: 16, marginBottom: 4, gap: 8 },
-  tab:          { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#f3f4f6' },
-  tabActive:    { backgroundColor: '#111827' },
-  tabTxt:       { fontSize: 14, fontWeight: '600', color: '#6b7280' },
-  tabTxtActive: { color: '#fff' },
-  tabBadge:     { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: '#e5e7eb' },
-  tabBadgeActive:{ backgroundColor: 'rgba(255,255,255,0.2)' },
-  tabBadgeTxt:  { fontSize: 12, fontWeight: '700', color: '#6b7280' },
+  container:         { flex: 1, backgroundColor: '#f9fafb' },
+  header:            { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, backgroundColor: '#f9fafb' },
+  headerTitle:       { fontSize: 26, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
+  lastRefresh:       { fontSize: 11, color: '#9ca3af', marginTop: 3 },
+  headerActions:     { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  refreshBtn:        { width: 38, height: 38, borderRadius: 10, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' },
+  addBtn:            { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111827', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, gap: 6 },
+  addBtnTxt:         { color: '#fff', fontSize: 14, fontWeight: '600' },
+  tabBar:            { flexDirection: 'row', marginHorizontal: 16, marginBottom: 4, gap: 8 },
+  tab:               { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#f3f4f6' },
+  tabActive:         { backgroundColor: '#111827' },
+  tabTxt:            { fontSize: 14, fontWeight: '600', color: '#6b7280' },
+  tabTxtActive:      { color: '#fff' },
+  tabBadge:          { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: '#e5e7eb' },
+  tabBadgeActive:    { backgroundColor: 'rgba(255,255,255,0.2)' },
+  tabBadgeTxt:       { fontSize: 12, fontWeight: '700', color: '#6b7280' },
   tabBadgeTxtActive: { color: '#fff' },
-  strip:        { flexDirection: 'row', marginHorizontal: 16, marginTop: 6, marginBottom: 4, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, justifyContent: 'space-around', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
-  stripItem:    { alignItems: 'center', gap: 3 },
-  stripCount:   { fontSize: 18, fontWeight: '800' },
-  stripLabel:   { fontSize: 11, color: '#6b7280', fontWeight: '500' },
-  filterCard:   { backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 10, borderRadius: 12, padding: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 4, elevation: 3 },
-  filterTitle:  { fontSize: 15, fontWeight: '700', color: '#1f2937', marginBottom: 10 },
-  filterRow:    { flexDirection: 'row', gap: 8 },
-  ddBtn:        { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9fafb', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
-  ddBtnTxt:     { flex: 1, fontSize: 12, color: '#1f2937' },
-  resultCount:  { fontSize: 11, color: '#9ca3af', marginTop: 8 },
-  empty:        { alignItems: 'center', paddingVertical: 60 },
-  emptyTitle:   { fontSize: 17, fontWeight: '600', color: '#374151', marginTop: 12 },
-  emptySub:     { fontSize: 13, color: '#9ca3af', marginTop: 4 },
-  pagination:   { backgroundColor: '#fff', borderRadius: 12, margin: 16, padding: 14, alignItems: 'center', gap: 10 },
-  pageInfo:     { fontSize: 13, color: '#374151', fontWeight: '500' },
-  pageControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pageBtn:      { padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff' },
-  pageBtnOff:   { borderColor: '#f3f4f6', backgroundColor: '#f9fafb' },
-  pageNum:      { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff' },
-  pageNumActive:{ backgroundColor: '#111827', borderColor: '#111827' },
-  pageNumTxt:   { fontSize: 14, fontWeight: '600', color: '#374151' },
-  pageNumTxtActive: { color: '#fff' },
-  ddOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
-  ddContainer:  { backgroundColor: '#fff', borderRadius: 16, minWidth: 250, maxWidth: width - 40, maxHeight: '70%', elevation: 12 },
-  ddTitle:      { padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  ddTitleTxt:   { fontSize: 17, fontWeight: '700', color: '#1f2937', textAlign: 'center' },
-  ddScroll:     { maxHeight: 300 },
-  dItem:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
-  dItemSel:     { backgroundColor: '#f3f4f6' },
-  dItemTxt:     { fontSize: 15, color: '#1f2937', fontWeight: '500', flex: 1 },
-  dItemTxtSel:  { color: '#111827', fontWeight: '700' },
-  calOverlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  calContainer: { backgroundColor: '#fff', borderRadius: 16, padding: 16, width: '100%', maxWidth: 360, elevation: 8 },
-  calHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  calTitle:     { fontSize: 17, fontWeight: '600', color: '#111827' },
-  calFooter:    { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  calFooterTxt: { fontSize: 14, fontWeight: '500', color: '#374151' },
+  strip:             { flexDirection: 'row', marginHorizontal: 16, marginTop: 6, marginBottom: 4, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, justifyContent: 'space-around', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  stripItem:         { alignItems: 'center', gap: 3 },
+  stripCount:        { fontSize: 18, fontWeight: '800' },
+  stripLabel:        { fontSize: 11, color: '#6b7280', fontWeight: '500' },
+  filterCard:        { backgroundColor: '#fff', marginHorizontal: 16, marginVertical: 10, borderRadius: 12, padding: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 4, elevation: 3 },
+  filterTitle:       { fontSize: 15, fontWeight: '700', color: '#1f2937', marginBottom: 10 },
+  filterRow:         { flexDirection: 'row', gap: 8 },
+  ddBtn:             { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9fafb', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
+  ddBtnTxt:          { flex: 1, fontSize: 12, color: '#1f2937' },
+  resultCount:       { fontSize: 11, color: '#9ca3af', marginTop: 8 },
+  empty:             { alignItems: 'center', paddingVertical: 60 },
+  emptyTitle:        { fontSize: 17, fontWeight: '600', color: '#374151', marginTop: 12 },
+  emptySub:          { fontSize: 13, color: '#9ca3af', marginTop: 4 },
+  pagination:        { backgroundColor: '#fff', borderRadius: 12, margin: 16, padding: 14, alignItems: 'center', gap: 10 },
+  pageInfo:          { fontSize: 13, color: '#374151', fontWeight: '500' },
+  pageControls:      { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pageBtn:           { padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff' },
+  pageBtnOff:        { borderColor: '#f3f4f6', backgroundColor: '#f9fafb' },
+  pageNum:           { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff' },
+  pageNumActive:     { backgroundColor: '#111827', borderColor: '#111827' },
+  pageNumTxt:        { fontSize: 14, fontWeight: '600', color: '#374151' },
+  pageNumTxtActive:  { color: '#fff' },
+  ddOverlay:         { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  ddContainer:       { backgroundColor: '#fff', borderRadius: 16, minWidth: 250, maxWidth: width - 40, maxHeight: '70%', elevation: 12 },
+  ddTitle:           { padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  ddTitleTxt:        { fontSize: 17, fontWeight: '700', color: '#1f2937', textAlign: 'center' },
+  ddScroll:          { maxHeight: 300 },
+  dItem:             { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
+  dItemSel:          { backgroundColor: '#f3f4f6' },
+  dItemTxt:          { fontSize: 15, color: '#1f2937', fontWeight: '500', flex: 1 },
+  dItemTxtSel:       { color: '#111827', fontWeight: '700' },
+  calOverlay:        { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  calContainer:      { backgroundColor: '#fff', borderRadius: 16, padding: 16, width: '100%', maxWidth: 360, elevation: 8 },
+  calHeader:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  calTitle:          { fontSize: 17, fontWeight: '600', color: '#111827' },
+  calFooter:         { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  calFooterTxt:      { fontSize: 14, fontWeight: '500', color: '#374151' },
   modalContainer:    { flex: 1, backgroundColor: '#f3f4f6' },
   modalHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   modalHeaderButton: { padding: 8, borderRadius: 8 },
@@ -1117,12 +1172,12 @@ const sc = StyleSheet.create({
   input:             { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15, color: '#1f2937' },
   statusContainer:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   statusOption:      { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f9fafb' },
-  statusOptionSelected: { backgroundColor: '#111827', borderColor: '#111827' },
-  statusOptionText:  { fontSize: 13, color: '#6b7280', fontWeight: '500' },
+  statusOptionSelected:     { backgroundColor: '#111827', borderColor: '#111827' },
+  statusOptionText:         { fontSize: 13, color: '#6b7280', fontWeight: '500' },
   statusOptionTextSelected: { color: '#fff', fontWeight: '700' },
   deleteButton:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fef2f2', paddingVertical: 13, paddingHorizontal: 20, borderRadius: 10, borderWidth: 1, borderColor: '#fecaca', gap: 8 },
   deleteButtonText:  { fontSize: 15, fontWeight: '600', color: '#ef4444' },
-  saveButtonContainer:{ backgroundColor: '#111827', paddingHorizontal: 16, paddingVertical: 8 },
+  saveButtonContainer: { backgroundColor: '#111827', paddingHorizontal: 16, paddingVertical: 8 },
   saveButton:        { fontSize: 15, fontWeight: '700', color: '#fff' },
   vehicleInput:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   vehicleInputText:  { fontSize: 15, color: '#1f2937' },

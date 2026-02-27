@@ -11,6 +11,9 @@ import {
   vehiclesService, bookingsService, notificationsService,
   websiteContentService, galleryService, storageService, firebaseAuth,
 } from '../services/firebaseService';
+// ─── ADD THIS IMPORT for direct Firestore deletion ────────────────────────────
+import { getFirestore, doc, deleteDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
+
 import ActionModal from '../components/AlertModal/ActionModal';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -22,7 +25,7 @@ const formatCurrency = (a) =>
 const formatDate = (d) =>
   new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 
-// ─── Design tokens — single source of truth for colours ──────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
   ink:        '#111827',
   inkSoft:    '#374151',
@@ -32,7 +35,6 @@ const C = {
   borderSoft: '#f3f4f6',
   surface:    '#f9fafb',
   white:      '#ffffff',
-  // status
   pending:    '#f59e0b',
   confirmed:  '#10b981',
   ongoing:    '#3b82f6',
@@ -41,7 +43,6 @@ const C = {
   completed:  '#6366f1',
   cancelled:  '#ef4444',
   declined:   '#f97316',
-  // category accents
   driver:     '#7c3aed',
   booking:    '#0ea5e9',
   charge:     '#10b981',
@@ -120,7 +121,7 @@ const NotificationBell = ({ notifications, onPress }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // NotificationItem
 // ─────────────────────────────────────────────────────────────────────────────
-const NotificationItem = ({ notification, onMarkRead, onRemove, setActionModalConfig, onNavigateToBooking }) => {
+const NotificationItem = ({ notification, onMarkRead, onDelete, onNavigateToBooking }) => {
   const [showActions, setShowActions] = useState(false);
 
   const getNotificationIcon = (type) => {
@@ -164,7 +165,10 @@ const NotificationItem = ({ notification, onMarkRead, onRemove, setActionModalCo
           showActions && styles.notificationItemActive,
           { borderLeftColor: leftBorder, borderLeftWidth: leftBorder !== 'transparent' ? 3 : 0 },
         ]}
-        onPress={() => { onMarkRead(notification.id); if (notification.bookingId && onNavigateToBooking) onNavigateToBooking(notification.bookingId); }}
+        onPress={() => {
+          onMarkRead(notification.id);
+          if (notification.bookingId && onNavigateToBooking) onNavigateToBooking(notification.bookingId);
+        }}
         onLongPress={() => setShowActions(true)}
         delayLongPress={500}
       >
@@ -207,29 +211,44 @@ const NotificationItem = ({ notification, onMarkRead, onRemove, setActionModalCo
       {showActions && (
         <View style={styles.notificationActions}>
           {!notification.read && (
-            <TouchableOpacity style={[styles.notifActionBtn, { backgroundColor: '#dcfce7' }]}
-              onPress={() => { onMarkRead(notification.id); setShowActions(false); }}>
+            <TouchableOpacity
+              style={[styles.notifActionBtn, { backgroundColor: '#dcfce7' }]}
+              onPress={() => { onMarkRead(notification.id); setShowActions(false); }}
+            >
               <Ionicons name="checkmark-circle-outline" size={14} color={C.confirmed} />
               <Text style={[styles.notifActionTxt, { color: C.confirmed }]}>Mark read</Text>
             </TouchableOpacity>
           )}
           {notification.bookingId && (
-            <TouchableOpacity style={[styles.notifActionBtn, { backgroundColor: '#eff6ff' }]}
-              onPress={() => { if (onNavigateToBooking) onNavigateToBooking(notification.bookingId); setShowActions(false); }}>
+            <TouchableOpacity
+              style={[styles.notifActionBtn, { backgroundColor: '#eff6ff' }]}
+              onPress={() => { if (onNavigateToBooking) onNavigateToBooking(notification.bookingId); setShowActions(false); }}
+            >
               <Ionicons name="eye-outline" size={14} color={C.ongoing} />
               <Text style={[styles.notifActionTxt, { color: C.ongoing }]}>View Booking</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={[styles.notifActionBtn, { backgroundColor: '#fee2e2' }]}
+          {/* ── FIX: Delete calls onDelete which now truly deletes from Firestore ── */}
+          <TouchableOpacity
+            style={[styles.notifActionBtn, { backgroundColor: '#fee2e2' }]}
             onPress={() => {
-              setActionModalConfig({ title: 'Remove Notification', message: 'Remove this notification?',
-                onConfirm: () => { onRemove(notification.id); setShowActions(false); } });
-            }}>
+              Alert.alert(
+                'Delete Notification',
+                'Delete this notification?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: () => { onDelete(notification.id); setShowActions(false); } },
+                ]
+              );
+            }}
+          >
             <Ionicons name="trash-outline" size={14} color={C.cancelled} />
-            <Text style={[styles.notifActionTxt, { color: C.cancelled }]}>Remove</Text>
+            <Text style={[styles.notifActionTxt, { color: C.cancelled }]}>Delete</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.notifActionBtn, { backgroundColor: C.surface }]}
-            onPress={() => setShowActions(false)}>
+          <TouchableOpacity
+            style={[styles.notifActionBtn, { backgroundColor: C.surface }]}
+            onPress={() => setShowActions(false)}
+          >
             <Ionicons name="close-outline" size={14} color={C.muted} />
             <Text style={[styles.notifActionTxt, { color: C.muted }]}>Cancel</Text>
           </TouchableOpacity>
@@ -240,51 +259,43 @@ const NotificationItem = ({ notification, onMarkRead, onRemove, setActionModalCo
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NotificationsModal — REDESIGNED
-//
-//  ┌────────────────────────────────────────┐
-//  │  Header (title · unread count · btns) │
-//  ├────────────────────────────────────────┤
-//  │  ROW 1: Driver pills                  │  ← tapping one SCOPES everything
-//  │  [All Drivers] [Juan] [Pedro] …       │
-//  │  ─ active driver context bar ─        │
-//  ├────────────────────────────────────────┤
-//  │  ROW 2: Category tabs                 │  ← filters WITHIN scoped pool
-//  │  [All] [Bookings] [Driver] [Charges]… │
-//  ├────────────────────────────────────────┤
-//  │  Notification list                    │
-//  └────────────────────────────────────────┘
+// NotificationsModal
 // ─────────────────────────────────────────────────────────────────────────────
 const NotificationsModal = ({
   visible, notifications, onClose,
-  onMarkRead, onMarkAllRead, onRemove,
-  setActionModalConfig, onClearAll, onNavigateToBooking,
+  onMarkRead, onMarkAllRead, onDelete, onDeleteAll,
+  setActionModalConfig, onNavigateToBooking,
 }) => {
-  const [selectedDriver, setSelectedDriver] = useState(null); // null = All Drivers
+  const [selectedDriver, setSelectedDriver] = useState(null);
   const [activeCategory, setActiveCategory] = useState('all');
 
-  // Reset on open
   useEffect(() => { if (visible) { setSelectedDriver(null); setActiveCategory('all'); } }, [visible]);
 
-  // 1. Unique driver names
-  const driverNames = [...new Set(notifications.filter(n => n.driver_name).map(n => n.driver_name))].sort();
-
-  // 2. Scope by selected driver
-  const scopedPool = selectedDriver
-    ? notifications.filter(n => n.driver_name === selectedDriver)
-    : notifications;
-
-  // 3. Category filter within scoped pool
-  const visibleNotifs = scopedPool.filter(n => {
+  const driverNames    = [...new Set(notifications.filter(n => n.driver_name).map(n => n.driver_name))].sort();
+  const scopedPool     = selectedDriver ? notifications.filter(n => n.driver_name === selectedDriver) : notifications;
+  const visibleNotifs  = scopedPool.filter(n => {
     if (activeCategory === 'all')    return true;
     if (activeCategory === 'unread') return !n.read;
     return getNotifFilter(n.type) === activeCategory;
   });
 
-  const getCatCount    = (key) => key === 'all' ? scopedPool.length : key === 'unread' ? scopedPool.filter(n => !n.read).length : scopedPool.filter(n => getNotifFilter(n.type) === key).length;
-  const totalUnread    = notifications.filter(n => !n.read).length;
-  const driverUnread   = (name) => notifications.filter(n => n.driver_name === name && !n.read).length;
-  const driverTotal    = (name) => notifications.filter(n => n.driver_name === name).length;
+  const getCatCount  = (key) => key === 'all' ? scopedPool.length : key === 'unread' ? scopedPool.filter(n => !n.read).length : scopedPool.filter(n => getNotifFilter(n.type) === key).length;
+  const totalUnread  = notifications.filter(n => !n.read).length;
+  const driverUnread = (name) => notifications.filter(n => n.driver_name === name && !n.read).length;
+  const driverTotal  = (name) => notifications.filter(n => n.driver_name === name).length;
+
+  const handleDeleteVisible = () => {
+    const ids = visibleNotifs.map(n => n.id);
+    if (!ids.length) return;
+    Alert.alert(
+      'Delete Notifications',
+      `Delete ${ids.length} notification${ids.length !== 1 ? 's' : ''}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete All', style: 'destructive', onPress: () => onDeleteAll(ids) },
+      ]
+    );
+  };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -303,9 +314,14 @@ const NotificationsModal = ({
               <Ionicons name="checkmark-done-outline" size={14} color={C.inkSoft} />
               <Text style={styles.notifHeaderBtnTxt}>Read all</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.notifHeaderBtn, { backgroundColor: '#fee2e2', borderColor: '#fecaca' }]} onPress={onClearAll}>
+            <TouchableOpacity
+              style={[styles.notifHeaderBtn, { backgroundColor: '#fee2e2', borderColor: '#fecaca' }]}
+              onPress={handleDeleteVisible}
+            >
               <Ionicons name="trash-outline" size={14} color={C.cancelled} />
-              <Text style={[styles.notifHeaderBtnTxt, { color: C.cancelled }]}>Clear</Text>
+              <Text style={[styles.notifHeaderBtnTxt, { color: C.cancelled }]}>
+                {visibleNotifs.length < notifications.length ? `Delete (${visibleNotifs.length})` : 'Delete All'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.notifCloseBtn} onPress={onClose}>
               <Ionicons name="close" size={18} color={C.ink} />
@@ -313,19 +329,14 @@ const NotificationsModal = ({
           </View>
         </View>
 
-        {/* ══════════════════════════════════════════════════════════
-            ROW 1 — DRIVER PILLS
-            Only shown when there are drivers in notifications.
-           ══════════════════════════════════════════════════════════ */}
+        {/* ── ROW 1: DRIVER PILLS ── */}
         {driverNames.length > 0 && (
           <View style={styles.driverSection}>
             <View style={styles.driverSectionLabel}>
               <View style={styles.driverSectionLabelDot} />
               <Text style={styles.driverSectionLabelTxt}>Filter by Driver</Text>
             </View>
-
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.driverPillRow}>
-              {/* All Drivers pill */}
               {(() => {
                 const active = !selectedDriver;
                 return (
@@ -346,11 +357,8 @@ const NotificationsModal = ({
                   </TouchableOpacity>
                 );
               })()}
-
               {driverNames.map(name => {
-                const active  = selectedDriver === name;
-                const total   = driverTotal(name);
-                const unread  = driverUnread(name);
+                const active = selectedDriver === name;
                 return (
                   <TouchableOpacity
                     key={name}
@@ -362,21 +370,17 @@ const NotificationsModal = ({
                         {name.charAt(0).toUpperCase()}
                       </Text>
                     </View>
-                    <Text style={[styles.driverPillName, active && styles.driverPillNameActive]} numberOfLines={1}>
-                      {name}
-                    </Text>
+                    <Text style={[styles.driverPillName, active && styles.driverPillNameActive]} numberOfLines={1}>{name}</Text>
                     <View style={[styles.driverPillBadge, active && styles.driverPillBadgeActive]}>
-                      <Text style={[styles.driverPillBadgeTxt, active && { color: C.driver }]}>{total}</Text>
+                      <Text style={[styles.driverPillBadgeTxt, active && { color: C.driver }]}>{driverTotal(name)}</Text>
                     </View>
-                    {unread > 0 && (
-                      <View style={styles.driverUnreadDot}><Text style={styles.driverUnreadDotTxt}>{unread}</Text></View>
+                    {driverUnread(name) > 0 && (
+                      <View style={styles.driverUnreadDot}><Text style={styles.driverUnreadDotTxt}>{driverUnread(name)}</Text></View>
                     )}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-
-            {/* Active driver context strip */}
             {selectedDriver && (
               <View style={styles.driverCtxBar}>
                 <View style={styles.driverCtxAva}>
@@ -399,10 +403,7 @@ const NotificationsModal = ({
           </View>
         )}
 
-        {/* ══════════════════════════════════════════════════════════
-            ROW 2 — CATEGORY TABS
-            Counts reflect the currently scoped driver pool.
-           ══════════════════════════════════════════════════════════ */}
+        {/* ── ROW 2: CATEGORY TABS ── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -440,7 +441,7 @@ const NotificationsModal = ({
             <NotificationItem
               notification={item}
               onMarkRead={onMarkRead}
-              onRemove={onRemove}
+              onDelete={onDelete}
               setActionModalConfig={setActionModalConfig}
               onNavigateToBooking={onNavigateToBooking}
             />
@@ -462,14 +463,13 @@ const NotificationsModal = ({
             </View>
           }
         />
-
       </SafeAreaView>
     </Modal>
   );
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WebsiteContentModal
+// WebsiteContentModal  (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 const WebsiteContentModal = ({ visible, onClose, section, onSave, setActionModalConfig, setFeedbackModal }) => {
   const [content, setContent] = useState(null);
@@ -564,7 +564,7 @@ const WebsiteContentModal = ({ visible, onClose, section, onSave, setActionModal
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GalleryModal
+// GalleryModal  (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 const GalleryModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFeedbackModal }) => {
   const [images, setImages]                 = useState([]);
@@ -657,7 +657,7 @@ const GalleryModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFe
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ContactModal
+// ContactModal  (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 const ContactModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFeedbackModal }) => {
   const [content, setContent] = useState(null);
@@ -716,7 +716,7 @@ const ContactModal = ({ visible, onClose, onRefresh, setActionModalConfig, setFe
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PaymentTrackerModal
+// PaymentTrackerModal  (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 const PaymentTrackerModal = ({ visible, onClose, bookings }) => {
   const allPayments = bookings
@@ -792,6 +792,34 @@ export default function DashboardScreen({ navigation }) {
 
   useEffect(() => { const user = firebaseAuth.getCurrentUser(); setCurrentUserId(user?.uid ?? null); }, []);
 
+  // ── FIX: Direct Firestore delete helper ────────────────────────────────────
+  const deleteNotifFromFirestore = async (id) => {
+    try {
+      const db = getFirestore();
+      await deleteDoc(doc(db, 'notifications', id));
+    } catch (e) {
+      console.error('deleteNotifFromFirestore error:', e);
+      // Fallback: mark dismissed so it won't reappear
+      try { await notificationsService.update(id, { dismissed: true, read: true }); } catch {}
+    }
+  };
+
+  // ── FIX: Batch delete all from Firestore ───────────────────────────────────
+  const batchDeleteNotifsFromFirestore = async (ids) => {
+    try {
+      const db    = getFirestore();
+      const batch = writeBatch(db);
+      ids.forEach(id => batch.delete(doc(db, 'notifications', id)));
+      await batch.commit();
+    } catch (e) {
+      console.error('batchDeleteNotifsFromFirestore error:', e);
+      // Fallback: dismiss individually
+      await Promise.all(ids.map(id =>
+        notificationsService.update(id, { dismissed: true, read: true }).catch(() => {})
+      ));
+    }
+  };
+
   const createNotification = async (data) => {
     if (!currentUserId) return;
     try {
@@ -800,6 +828,8 @@ export default function DashboardScreen({ navigation }) {
         title:       data.title,
         message:     data.message,
         type:        data.type,
+        // ── FIX: store the dedup key so we can check it later ──
+        dedup_key:   data.dedupKey || data.type,
         driver_name: data.driverName || null,
         read:        false,
         dismissed:   false,
@@ -814,46 +844,58 @@ export default function DashboardScreen({ navigation }) {
       const startDate = new Date(booking.rental_start_date);
       const daysDiff  = Math.ceil((startDate - today) / (1000 * 3600 * 24));
       const existing  = await notificationsService.listByBookingId(booking.id);
-      const types     = new Set(existing?.map(n => n.type) || []);
-      const driver    = booking.assigned_driver || 'Driver';
-      const vehicle   = `${booking.vehicles?.year || ''} ${booking.vehicles?.make || ''} ${booking.vehicles?.model || ''}`.trim();
-      const customer  = booking.customer_name;
 
-      if (booking.status === 'pending'   && !types.has('new_booking'))
-        await createNotification({ bookingId: booking.id, type: 'new_booking',       title: '📋 New Booking Request', message: `${customer} requested ${vehicle}` });
-      if (booking.status === 'confirmed' && daysDiff === 0 && !types.has('pickup_today'))
-        await createNotification({ bookingId: booking.id, type: 'pickup_today',       title: '📅 Pickup Today',        message: `${customer} is picking up ${vehicle} today` });
-      if (booking.status === 'completed' && !types.has('booking_completed'))
-        await createNotification({ bookingId: booking.id, type: 'booking_completed', title: '✅ Booking Completed',    message: `${customer}'s booking for ${vehicle} is now complete. Total: ${formatCurrency(booking.total_price)}` });
-      if (booking.status === 'cancelled' && !types.has('booking_cancelled'))
-        await createNotification({ bookingId: booking.id, type: 'booking_cancelled', title: '❌ Booking Cancelled',    message: `${customer}'s booking for ${vehicle} was cancelled` });
-      if (booking.status === 'declined'  && !types.has('booking_declined'))
-        await createNotification({ bookingId: booking.id, type: 'booking_declined',  title: '🚫 Booking Declined',    message: `${customer}'s booking for ${vehicle} was declined` });
+      // ── FIX: build a dedup set from dedup_key (falls back to type) ─────────
+      const dedupKeys = new Set((existing || []).map(n => n.dedup_key || n.type));
+
+      const driver   = booking.assigned_driver || 'Driver';
+      const vehicle  = `${booking.vehicles?.year || ''} ${booking.vehicles?.make || ''} ${booking.vehicles?.model || ''}`.trim();
+      const customer = booking.customer_name;
+
+      if (booking.status === 'pending'   && !dedupKeys.has('new_booking'))
+        await createNotification({ bookingId: booking.id, type: 'new_booking',       dedupKey: 'new_booking',       title: '📋 New Booking Request', message: `${customer} requested ${vehicle}` });
+      if (booking.status === 'confirmed' && daysDiff === 0 && !dedupKeys.has('pickup_today'))
+        await createNotification({ bookingId: booking.id, type: 'pickup_today',       dedupKey: 'pickup_today',       title: '📅 Pickup Today',        message: `${customer} is picking up ${vehicle} today` });
+      if (booking.status === 'completed' && !dedupKeys.has('booking_completed'))
+        await createNotification({ bookingId: booking.id, type: 'booking_completed', dedupKey: 'booking_completed', title: '✅ Booking Completed',    message: `${customer}'s booking for ${vehicle} is now complete. Total: ${formatCurrency(booking.total_price)}` });
+      if (booking.status === 'cancelled' && !dedupKeys.has('booking_cancelled'))
+        await createNotification({ bookingId: booking.id, type: 'booking_cancelled', dedupKey: 'booking_cancelled', title: '❌ Booking Cancelled',    message: `${customer}'s booking for ${vehicle} was cancelled` });
+      if (booking.status === 'declined'  && !dedupKeys.has('booking_declined'))
+        await createNotification({ bookingId: booking.id, type: 'booking_declined',  dedupKey: 'booking_declined',  title: '🚫 Booking Declined',    message: `${customer}'s booking for ${vehicle} was declined` });
 
       if (booking.delivery_option === 'deliver') {
-        if (booking.status === 'ongoing'   && !types.has('driver_ongoing'))
-          await createNotification({ bookingId: booking.id, type: 'driver_ongoing',   driverName: driver, title: '🚗 Driver En Route',    message: `[${driver}] is driving ${vehicle} to ${customer}` });
-        if (booking.status === 'delivered' && !types.has('driver_delivered'))
-          await createNotification({ bookingId: booking.id, type: 'driver_delivered', driverName: driver, title: '📦 Vehicle Delivered',   message: `[${driver}] delivered ${vehicle} to ${customer}` });
-        if (booking.status === 'retrieved' && !types.has('driver_retrieved'))
-          await createNotification({ bookingId: booking.id, type: 'driver_retrieved', driverName: driver, title: '🔁 Vehicle Retrieved',   message: `[${driver}] retrieved ${vehicle} from ${customer}` });
+        if (booking.status === 'ongoing'   && !dedupKeys.has('driver_ongoing'))
+          await createNotification({ bookingId: booking.id, type: 'driver_ongoing',   dedupKey: 'driver_ongoing',   driverName: driver, title: '🚗 Driver En Route',    message: `[${driver}] is driving ${vehicle} to ${customer}` });
+        if (booking.status === 'delivered' && !dedupKeys.has('driver_delivered'))
+          await createNotification({ bookingId: booking.id, type: 'driver_delivered', dedupKey: 'driver_delivered', driverName: driver, title: '📦 Vehicle Delivered',   message: `[${driver}] delivered ${vehicle} to ${customer}` });
+        if (booking.status === 'retrieved' && !dedupKeys.has('driver_retrieved'))
+          await createNotification({ bookingId: booking.id, type: 'driver_retrieved', dedupKey: 'driver_retrieved', driverName: driver, title: '🔁 Vehicle Retrieved',   message: `[${driver}] retrieved ${vehicle} from ${customer}` });
 
+        // ── FIX: each payment log entry gets a unique dedup key ───────────────
         const payments = booking.payment_log || [];
         for (let i = 0; i < payments.length; i++) {
-          if (!types.has(`driver_payment_${i}`))
-            await createNotification({ bookingId: booking.id, type: 'driver_payment', driverName: driver, title: '💰 Payment Collected',
-              message: `[${driver}] collected ${formatCurrency(payments[i].amount)} from ${customer}${payments[i].event ? ` — ${payments[i].event}` : ''}` });
+          const payKey = `driver_payment_${i}`;
+          if (!dedupKeys.has(payKey))
+            await createNotification({
+              bookingId: booking.id,
+              type: 'driver_payment',
+              dedupKey: payKey,           // ← unique per payment entry
+              driverName: driver,
+              title: '💰 Payment Collected',
+              message: `[${driver}] collected ${formatCurrency(payments[i].amount)} from ${customer}${payments[i].event ? ` — ${payments[i].event}` : ''}`,
+            });
         }
-        if (booking.damage_fee      > 0 && !types.has('driver_damage'))
-          await createNotification({ bookingId: booking.id, type: 'driver_damage',       driverName: driver, title: '⚠️ Damage Fee',         message: `[${driver}] reported damage charge of ${formatCurrency(booking.damage_fee)} — ${customer}'s ${vehicle}` });
-        if (booking.fuel_charge     > 0 && !types.has('driver_fuel'))
-          await createNotification({ bookingId: booking.id, type: 'driver_fuel',         driverName: driver, title: '⛽ Fuel Charge',         message: `[${driver}] reported fuel charge of ${formatCurrency(booking.fuel_charge)} for ${customer}` });
-        if (booking.delay_charge    > 0 && !types.has('driver_delay'))
-          await createNotification({ bookingId: booking.id, type: 'driver_delay',        driverName: driver, title: '⏱ Delay Charge',        message: `[${driver}] recorded delay charge of ${formatCurrency(booking.delay_charge)} for ${customer}` });
-        if (booking.extra_km_charge > 0 && !types.has('driver_extra_km'))
-          await createNotification({ bookingId: booking.id, type: 'driver_extra_km',     driverName: driver, title: '📍 Extra KM Charge',     message: `[${driver}] recorded extra km charge of ${formatCurrency(booking.extra_km_charge)} for ${customer}` });
-        if (booking.extra_hours_charge > 0 && !types.has('driver_extra_hours'))
-          await createNotification({ bookingId: booking.id, type: 'driver_extra_hours',  driverName: driver, title: '⏰ Extra Hours Charge',  message: `[${driver}] recorded extra hours charge of ${formatCurrency(booking.extra_hours_charge)} for ${customer}` });
+
+        if (booking.damage_fee         > 0 && !dedupKeys.has('driver_damage'))
+          await createNotification({ bookingId: booking.id, type: 'driver_damage',       dedupKey: 'driver_damage',       driverName: driver, title: '⚠️ Damage Fee',         message: `[${driver}] reported damage charge of ${formatCurrency(booking.damage_fee)} — ${customer}'s ${vehicle}` });
+        if (booking.fuel_charge        > 0 && !dedupKeys.has('driver_fuel'))
+          await createNotification({ bookingId: booking.id, type: 'driver_fuel',         dedupKey: 'driver_fuel',         driverName: driver, title: '⛽ Fuel Charge',         message: `[${driver}] reported fuel charge of ${formatCurrency(booking.fuel_charge)} for ${customer}` });
+        if (booking.delay_charge       > 0 && !dedupKeys.has('driver_delay'))
+          await createNotification({ bookingId: booking.id, type: 'driver_delay',        dedupKey: 'driver_delay',        driverName: driver, title: '⏱ Delay Charge',        message: `[${driver}] recorded delay charge of ${formatCurrency(booking.delay_charge)} for ${customer}` });
+        if (booking.extra_km_charge    > 0 && !dedupKeys.has('driver_extra_km'))
+          await createNotification({ bookingId: booking.id, type: 'driver_extra_km',     dedupKey: 'driver_extra_km',     driverName: driver, title: '📍 Extra KM Charge',     message: `[${driver}] recorded extra km charge of ${formatCurrency(booking.extra_km_charge)} for ${customer}` });
+        if (booking.extra_hours_charge > 0 && !dedupKeys.has('driver_extra_hours'))
+          await createNotification({ bookingId: booking.id, type: 'driver_extra_hours',  dedupKey: 'driver_extra_hours',  driverName: driver, title: '⏰ Extra Hours Charge',  message: `[${driver}] recorded extra hours charge of ${formatCurrency(booking.extra_hours_charge)} for ${customer}` });
       }
     }
     await fetchNotifications();
@@ -863,13 +905,17 @@ export default function DashboardScreen({ navigation }) {
     if (!currentUserId) return;
     try {
       const data = await notificationsService.listUnread();
-      const formatted = (data || []).map(n => {
-        const diffMin = Math.floor((new Date() - new Date(n.created_at)) / 60000);
-        const timeAgo = diffMin < 1 ? 'Just now' : diffMin < 60 ? `${diffMin}m ago` : diffMin < 1440 ? `${Math.floor(diffMin / 60)}h ago` : `${Math.floor(diffMin / 1440)}d ago`;
-        return { ...n, timeAgo, bookingId: n.booking_id, driver_name: n.driver_name || null };
-      });
+      const formatted = (data || [])
+        .filter(n => !n.dismissed)
+        .map(n => {
+          const diffMin = Math.floor((new Date() - new Date(n.created_at)) / 60000);
+          const timeAgo = diffMin < 1 ? 'Just now' : diffMin < 60 ? `${diffMin}m ago` : diffMin < 1440 ? `${Math.floor(diffMin / 60)}h ago` : `${Math.floor(diffMin / 1440)}d ago`;
+          return { ...n, timeAgo, bookingId: n.booking_id, driver_name: n.driver_name || null };
+        });
       setNotifications(formatted);
-    } catch {}
+    } catch (e) {
+      console.error('fetchNotifications error:', e);
+    }
   };
 
   const fetchDashboardData = async () => {
@@ -909,12 +955,44 @@ export default function DashboardScreen({ navigation }) {
     return () => { uV(); uB(); uN(); };
   }, [currentUserId]);
 
-  const handleLogout               = () => setActionModalConfig({ title: 'Logout', message: 'Are you sure you want to logout?', onConfirm: async () => { try { await firebaseAuth.signOut(); } catch { setFeedbackModal({ visible: true, type: 'error', message: 'Failed to logout.' }); } } });
-  const handleMarkNotificationRead = async (id) => { try { setNotifications(p => p.map(n => n.id === id ? { ...n, read: true } : n)); await notificationsService.update(id, { read: true }); } catch {} };
-  const handleMarkAllRead          = async ()   => { try { setNotifications(p => p.map(n => ({ ...n, read: true }))); await notificationsService.markAllRead(); } catch {} };
-  const handleClearAll             = ()         => setActionModalConfig({ title: 'Clear All', message: 'Clear all notifications?', onConfirm: async () => { try { setNotifications([]); await notificationsService.markAllDismissed(); setFeedbackModal({ visible: true, type: 'success', message: 'All notifications cleared!' }); } catch { setFeedbackModal({ visible: true, type: 'error', message: 'Failed to clear.' }); } } });
-  const handleRemoveNotification   = async (id) => { try { setNotifications(p => p.filter(n => n.id !== id)); await notificationsService.update(id, { dismissed: true }); } catch {} };
-  const handleNavigateToBooking    = (id)       => { setShowNotifications(false); navigation?.navigate?.('Bookings', { screen: 'BookingsList', params: { openBookingId: id, openInEditMode: true } }); };
+  const handleLogout = () => setActionModalConfig({
+    title: 'Logout', message: 'Are you sure you want to logout?',
+    onConfirm: async () => { try { await firebaseAuth.signOut(); } catch { setFeedbackModal({ visible: true, type: 'error', message: 'Failed to logout.' }); } },
+  });
+
+  const handleMarkNotificationRead = async (id) => {
+    try {
+      setNotifications(p => p.map(n => n.id === id ? { ...n, read: true } : n));
+      await notificationsService.update(id, { read: true });
+    } catch {}
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      setNotifications(p => p.map(n => ({ ...n, read: true })));
+      await notificationsService.markAllRead();
+    } catch {}
+  };
+
+  // ── FIX: Single delete — truly removes the document from Firestore ─────────
+  const handleDeleteNotification = async (id) => {
+    // Remove from UI immediately for snappy feel
+    setNotifications(p => p.filter(n => n.id !== id));
+    await deleteNotifFromFirestore(id);
+  };
+
+  // ── FIX: Delete all — batch-deletes every document from Firestore ──────────
+  const handleDeleteAllNotifications = async (ids) => {
+    if (!ids.length) return;
+    // Wipe from UI immediately
+    setNotifications(p => p.filter(n => !ids.includes(n.id)));
+    await batchDeleteNotifsFromFirestore(ids);
+  };
+
+  const handleNavigateToBooking = (id) => {
+    setShowNotifications(false);
+    navigation?.navigate?.('Bookings', { screen: 'BookingsList', params: { openBookingId: id, openInEditMode: true } });
+  };
 
   const countByStatus = (st) => allBookings.filter(b => b.status === st).length;
 
@@ -1100,8 +1178,8 @@ export default function DashboardScreen({ navigation }) {
         onClose={() => setShowNotifications(false)}
         onMarkRead={handleMarkNotificationRead}
         onMarkAllRead={handleMarkAllRead}
-        onClearAll={handleClearAll}
-        onRemove={handleRemoveNotification}
+        onDelete={handleDeleteNotification}
+        onDeleteAll={handleDeleteAllNotifications}
         setActionModalConfig={setActionModalConfig}
         onNavigateToBooking={handleNavigateToBooking}
       />
@@ -1119,7 +1197,7 @@ export default function DashboardScreen({ navigation }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Styles
+// Styles  (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container:      { flex: 1, backgroundColor: '#fcfcfc', paddingHorizontal: 18, paddingTop: 8 },
@@ -1129,16 +1207,13 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 14, color: C.muted, marginTop: 2 },
   headerActions:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
 
-  // Bell
   notificationBell:      { position: 'relative', padding: 10, borderRadius: 8 },
   notificationBadge:     { position: 'absolute', top: 4, right: 4, backgroundColor: C.unread, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
   notificationBadgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
   logoutButton:          { padding: 8, borderRadius: 8, backgroundColor: C.borderSoft },
 
-  // ── Notification modal ─────────────────────────────────────────────────────
   modalContainer: { flex: 1, backgroundColor: C.white, flexDirection: 'column' },
 
-  // Header
   notifHeader:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border },
   notifHeaderTitle:   { fontSize: 20, fontWeight: '800', color: C.ink },
   notifHeaderSub:     { fontSize: 12, color: C.subtle, marginTop: 2 },
@@ -1147,26 +1222,22 @@ const styles = StyleSheet.create({
   notifHeaderBtnTxt:  { fontSize: 12, fontWeight: '600', color: C.inkSoft },
   notifCloseBtn:      { width: 30, height: 30, borderRadius: 15, backgroundColor: C.borderSoft, justifyContent: 'center', alignItems: 'center', marginLeft: 2 },
 
-  // ── ROW 1: Driver section ──────────────────────────────────────────────────
-  driverSection:       { paddingTop: 12, paddingBottom: 0, backgroundColor: '#fafbff', borderBottomWidth: 1, borderBottomColor: C.border },
-  driverSectionLabel:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, marginBottom: 9 },
+  driverSection:        { paddingTop: 12, paddingBottom: 0, backgroundColor: '#fafbff', borderBottomWidth: 1, borderBottomColor: C.border },
+  driverSectionLabel:   { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, marginBottom: 9 },
   driverSectionLabelDot:{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.driver },
   driverSectionLabelTxt:{ fontSize: 11, fontWeight: '700', color: C.driver, textTransform: 'uppercase', letterSpacing: 0.6 },
-
-  driverPillRow:      { flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 11 },
-  driverPill:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 22, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.border, maxWidth: 160, position: 'relative' },
-  driverPillActive:   { backgroundColor: C.driver + '10', borderColor: C.driver },
-  driverPillAva:      { width: 24, height: 24, borderRadius: 12, backgroundColor: C.borderSoft, justifyContent: 'center', alignItems: 'center' },
-  driverPillInitial:  { fontSize: 11, fontWeight: '800', color: C.inkSoft },
-  driverPillName:     { fontSize: 12, fontWeight: '600', color: C.inkSoft, flex: 1 },
-  driverPillNameActive:{ color: C.driver, fontWeight: '700' },
-  driverPillBadge:    { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: C.borderSoft, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
+  driverPillRow:        { flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 11 },
+  driverPill:           { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 22, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.border, maxWidth: 160, position: 'relative' },
+  driverPillActive:     { backgroundColor: C.driver + '10', borderColor: C.driver },
+  driverPillAva:        { width: 24, height: 24, borderRadius: 12, backgroundColor: C.borderSoft, justifyContent: 'center', alignItems: 'center' },
+  driverPillInitial:    { fontSize: 11, fontWeight: '800', color: C.inkSoft },
+  driverPillName:       { fontSize: 12, fontWeight: '600', color: C.inkSoft, flex: 1 },
+  driverPillNameActive: { color: C.driver, fontWeight: '700' },
+  driverPillBadge:      { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: C.borderSoft, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
   driverPillBadgeActive:{ backgroundColor: C.driver + '18' },
-  driverPillBadgeTxt: { fontSize: 10, fontWeight: '700', color: C.inkSoft },
-  driverUnreadDot:    { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.unread, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: C.white },
-  driverUnreadDotTxt: { fontSize: 9, fontWeight: '800', color: '#fff' },
-
-  // Active driver context bar
+  driverPillBadgeTxt:   { fontSize: 10, fontWeight: '700', color: C.inkSoft },
+  driverUnreadDot:      { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.unread, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3, borderWidth: 1.5, borderColor: C.white },
+  driverUnreadDotTxt:   { fontSize: 9, fontWeight: '800', color: '#fff' },
   driverCtxBar:    { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 14, marginBottom: 11, padding: 10, backgroundColor: C.driver, borderRadius: 11 },
   driverCtxAva:    { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   driverCtxInitial:{ fontSize: 13, fontWeight: '800', color: '#fff' },
@@ -1174,18 +1245,15 @@ const styles = StyleSheet.create({
   driverCtxSub:    { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 1 },
   driverCtxClose:  { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
 
-  // ── ROW 2: Category tabs ───────────────────────────────────────────────────
-  catScroll: { maxHeight: 62, backgroundColor: C.white },
-  catRow:    { flexDirection: 'row', paddingHorizontal: 16, gap: 7, paddingTop: 8, paddingBottom: 12 },
-  catTab:    { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border },
-  catTabTxt: { fontSize: 12, fontWeight: '600', color: C.muted },
+  catScroll:        { maxHeight: 62, backgroundColor: C.white },
+  catRow:           { flexDirection: 'row', paddingHorizontal: 16, gap: 7, paddingTop: 8, paddingBottom: 12 },
+  catTab:           { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border },
+  catTabTxt:        { fontSize: 12, fontWeight: '600', color: C.muted },
   catTabBadge:      { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: C.border, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
   catTabBadgeActive:{ backgroundColor: 'rgba(255,255,255,0.9)' },
   catTabBadgeTxt:   { fontSize: 10, fontWeight: '700', color: C.inkSoft },
+  notifDivider:     { height: 1, backgroundColor: C.border },
 
-  notifDivider: { height: 1, backgroundColor: C.border },
-
-  // ── Notification items ─────────────────────────────────────────────────────
   notificationsList:     { paddingHorizontal: 14, paddingVertical: 12 },
   notificationWrapper:   { marginBottom: 9 },
   notificationItem:      { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 13, paddingHorizontal: 12, backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.border, position: 'relative' },
@@ -1210,12 +1278,10 @@ const styles = StyleSheet.create({
   emptyNotificationsText:    { fontSize: 16, fontWeight: '700', color: C.inkSoft, marginBottom: 4 },
   emptyNotificationsSubtext: { fontSize: 13, color: C.subtle, textAlign: 'center', paddingHorizontal: 24 },
 
-  // Generic modal shared (non-notification modals)
-  modalHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.border },
-  modalTitle:     { fontSize: 20, fontWeight: '700', color: C.ink },
-  modalContent:   { flex: 1, padding: 20 },
+  modalHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: C.border },
+  modalTitle:   { fontSize: 20, fontWeight: '700', color: C.ink },
+  modalContent: { flex: 1, padding: 20 },
 
-  // Form
   label:              { fontSize: 14, fontWeight: '600', color: C.inkSoft, marginBottom: 8, marginTop: 12 },
   input:              { borderWidth: 1, borderColor: C.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: C.white, color: C.ink },
   textArea:           { minHeight: 100, textAlignVertical: 'top' },
@@ -1228,7 +1294,6 @@ const styles = StyleSheet.create({
   saveButtonText:     { color: 'white', fontSize: 16, fontWeight: '600' },
   loadingContainer:   { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
 
-  // Gallery
   uploadButton:          { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.ink, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   uploadButtonText:      { color: 'white', fontSize: 14, fontWeight: '500' },
   emptyGallery:          { alignItems: 'center', paddingVertical: 60 },
@@ -1261,27 +1326,22 @@ const styles = StyleSheet.create({
   cancelUploadButton:    { backgroundColor: C.white, borderWidth: 1, borderColor: C.border },
   uploadFormButtonText:  { fontSize: 14, fontWeight: '600', color: 'white' },
 
-  // Dashboard layout
   scrollView:      { flex: 1 },
   scrollContainer: { paddingBottom: Platform.OS === 'ios' ? 100 : 80 },
+  statsContainer:  { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 },
+  statCard:        { backgroundColor: C.white, borderRadius: 16, padding: 16, width: '49%', marginBottom: 16, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3, alignItems: 'center' },
+  statContent:     { alignItems: 'center' },
+  statIcon:        { marginBottom: 8 },
+  statValue:       { fontSize: 28, fontWeight: '800', marginBottom: 4 },
+  statTitle:       { color: C.inkSoft, fontSize: 12, fontWeight: '500', textAlign: 'center' },
 
-  // Stat cards
-  statsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 },
-  statCard:       { backgroundColor: C.white, borderRadius: 16, padding: 16, width: '49%', marginBottom: 16, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3, alignItems: 'center' },
-  statContent:    { alignItems: 'center' },
-  statIcon:       { marginBottom: 8 },
-  statValue:      { fontSize: 28, fontWeight: '800', marginBottom: 4 },
-  statTitle:      { color: C.inkSoft, fontSize: 12, fontWeight: '500', textAlign: 'center' },
+  revenueCard:          { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3 },
+  revenueHeader:        { marginBottom: 12 },
+  revenueContent:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  revenueValue:         { fontSize: 28, fontWeight: 'bold', color: C.confirmed, marginBottom: 4 },
+  revenueSubtext:       { fontSize: 14, color: C.subtle, fontWeight: '500' },
+  revenueIconContainer: { backgroundColor: C.confirmed + '18', padding: 12, borderRadius: 12 },
 
-  // Revenue
-  revenueCard:         { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3 },
-  revenueHeader:       { marginBottom: 12 },
-  revenueContent:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  revenueValue:        { fontSize: 28, fontWeight: 'bold', color: C.confirmed, marginBottom: 4 },
-  revenueSubtext:      { fontSize: 14, color: C.subtle, fontWeight: '500' },
-  revenueIconContainer:{ backgroundColor: C.confirmed + '18', padding: 12, borderRadius: 12 },
-
-  // Status overview
   statusOverviewCard: { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3 },
   statusGrid:         { flexDirection: 'row', gap: 12, marginTop: 12 },
   statusItem:         { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: C.surface, borderRadius: 10, gap: 10, borderWidth: 1, borderColor: C.borderSoft },
@@ -1289,7 +1349,6 @@ const styles = StyleSheet.create({
   statusValue:        { fontSize: 20, fontWeight: '800', color: C.ink },
   statusLabel:        { fontSize: 11, color: C.muted, fontWeight: '500', marginTop: 1 },
 
-  // Sections
   section:        { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3.84, elevation: 3 },
   sectionHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
   sectionTitle:   { fontWeight: '800', fontSize: 17, letterSpacing: -0.3, color: C.ink },
@@ -1300,7 +1359,6 @@ const styles = StyleSheet.create({
   showMoreBtn:    { marginTop: 8, paddingVertical: 10, alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.border },
   showMoreTxt:    { fontSize: 13, color: C.muted, fontWeight: '500' },
 
-  // Driver assignments
   paymentTrackerBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.ink, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   paymentTrackerBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   driverBookingItem:     { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: C.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: C.border, gap: 10 },
@@ -1316,7 +1374,6 @@ const styles = StyleSheet.create({
   statusMiniPill:        { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   statusMiniText:        { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
 
-  // Recent bookings
   bookingItem:      { flexDirection: 'row', alignItems: 'stretch', marginBottom: 10, backgroundColor: C.surface, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: C.border, minHeight: 80 },
   bookingLeft:      { flexDirection: 'row', alignItems: 'stretch', flex: 1, marginRight: 12, minWidth: 0 },
   bookingInfo:      { flex: 1, justifyContent: 'center', minWidth: 0 },
@@ -1334,7 +1391,6 @@ const styles = StyleSheet.create({
   emptyState:    { alignItems: 'center', paddingVertical: 40 },
   emptyStateText:{ color: C.muted, fontWeight: '500', fontSize: 15, marginTop: 12 },
 
-  // Website management
   websiteCardFull:    { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.surface, borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.border },
   websiteCardIconBox: { width: 42, height: 42, borderRadius: 10, backgroundColor: C.white, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border },
   websiteCardTitle:   { fontSize: 14, fontWeight: '700', color: C.ink, marginBottom: 2 },
@@ -1345,7 +1401,6 @@ const styles = StyleSheet.create({
   websiteTileTitle:   { fontSize: 13, fontWeight: '700', color: C.ink, marginBottom: 3, textAlign: 'center' },
   websiteTileDesc:    { fontSize: 11, color: C.subtle, textAlign: 'center', lineHeight: 15 },
 
-  // Payment tracker
   paymentTotalBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', margin: 16, padding: 16, backgroundColor: '#f0fdf4', borderRadius: 12, borderWidth: 1, borderColor: '#d1fae5' },
   paymentTotalLabel:  { fontSize: 14, fontWeight: '600', color: '#166534' },
   paymentTotalValue:  { fontSize: 20, fontWeight: '800', color: '#15803d' },
